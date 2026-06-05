@@ -720,6 +720,14 @@ async function loadAll() {
   try { obras = await db('GET','obras?order=nombre') || []; } catch(e){ obras=[]; }
   try { cfdiEmitidos = await db('GET','cfdi_emitidos?order=fecha.desc') || []; } catch(e){ cfdiEmitidos=[]; }
   try { cfdiRecibidos = await db('GET','cfdi_recibidos?order=fecha.desc') || []; } catch(e){ cfdiRecibidos=[]; }
+  try {
+    movBancariosDB = await db('GET','movimientos_bancarios?order=fecha.desc') || [];
+    movBancariosPorCuenta = {};
+    movBancariosDB.forEach(m => {
+      if(!movBancariosPorCuenta[m.cuenta_id]) movBancariosPorCuenta[m.cuenta_id] = [];
+      movBancariosPorCuenta[m.cuenta_id].push(m);
+    });
+  } catch(e){ movBancariosDB=[]; movBancariosPorCuenta={}; }
 }
 
 // ── TABS ─────────────────────────────────────────────
@@ -1049,7 +1057,7 @@ function renderMovLista(tipo) {
         <div style="text-align:right;flex-shrink:0;margin-left:10px">
           <div class="item-amount" style="color:${color}">${fmt(m.monto)}</div>
           ${m.iva?`<div style="font-size:10px;color:var(--dim)">+IVA ${fmt(m.iva)}</div>`:''}
-          <button onclick="deleteMov('${m.id}')" style="border:none;background:none;color:var(--dim);font-size:11px;cursor:pointer;margin-top:4px;padding:2px 4px;border-radius:4px">🗑</button>
+          ${(currentUser.rol==='director'||currentUser.rol==='admin')?`<button onclick="deleteMov('${m.id}')" style="border:none;background:none;color:var(--dim);font-size:11px;cursor:pointer;margin-top:4px;padding:2px 4px;border-radius:4px">🗑</button>`:''}
         </div>
       </div>`;
     });
@@ -1225,6 +1233,7 @@ let edoParsed = [];
 let cfdiMasivoParsed = [];
 // movBancarios is now a dict keyed by cuenta_id: { 'cuenta_id': [{...mov...}] }
 let movBancariosPorCuenta = {};
+let movBancariosDB = [];
 let cuentaConcilActiva = null; // cuenta_id currently selected in conciliacion
 let concTab = 'pendientes';
 let ligandoMovId = null;
@@ -1309,7 +1318,7 @@ function renderConciliacion() {
     <button class="btn btn-accent btn-sm" onclick="autoConciliar()">⚡ Auto-conciliar</button>
     <button class="btn btn-ghost btn-sm" onclick="exportConciliacion()">📋 Reporte CSV</button>
     <button class="btn btn-ghost btn-sm" onclick="exportarMovimientosExcel()">📊 Exportar Excel</button>
-    ${movBancarios.length?`<button class="btn btn-danger btn-sm" onclick="limpiarCuenta()">🗑 Limpiar</button>`:''}
+    ${movBancarios.length&&(currentUser.rol==='director'||currentUser.rol==='admin')?`<button class="btn btn-danger btn-sm" onclick="limpiarCuenta()">🗑 Limpiar</button>`:''}
   </div>`;
 
   // Sub-tabs
@@ -1377,7 +1386,7 @@ function renderConciliacion() {
               <div class="item-sub">${fmtDate(m.fecha)} · ${(m.descripcion||'').slice(0,35)}</div>
               ${cfdi?`<div class="item-sub" style="color:var(--accent2)">🧾 ${cfdi.emisor_nombre||cfdi.receptor_nombre||'CFDI'} · ${fmt(cfdi.total)}</div>`:''}
             </div>
-            <button class="conc-unlink-btn" onclick="desligar('${m.id}')">Desligar</button>
+            ${(currentUser.rol==='director'||currentUser.rol==='admin')?`<button class="conc-unlink-btn" onclick="desligar('${m.id}')">Desligar</button>`:''}
           </div>
         </div>`;
       });
@@ -1425,13 +1434,15 @@ function setCuentaConcil(cuentaId) {
   renderConciliacion();
 }
 
-function limpiarCuenta() {
+async function limpiarCuenta() {
   if(!cuentaConcilActiva) return;
   const cuenta = cuentas.find(c=>c.id===cuentaConcilActiva);
-  if(!confirm(`¿Limpiar todos los movimientos de "${cuenta?.nombre||'esta cuenta'}"? Los movimientos importados se eliminarán de la conciliación (no afecta Supabase).`)) return;
-  movBancariosPorCuenta[cuentaConcilActiva] = [];
-  showToast('Movimientos eliminados');
-  renderConciliacion();
+  if(!confirm(`¿Eliminar PERMANENTEMENTE todos los movimientos importados de "${cuenta?.nombre||'esta cuenta'}" en la base de datos?`)) return;
+  try {
+    await db('DELETE', 'movimientos_bancarios?cuenta_id=eq.'+cuentaConcilActiva);
+    showToast('Movimientos eliminados definitivamente');
+    await loadAll(); renderConciliacion();
+  } catch(e){ showToast('Error al limpiar la cuenta', true); }
 }
 
 // ── SUGERIR CFDI automáticamente ──
@@ -1510,10 +1521,12 @@ function renderLigarList() {
   document.getElementById('ligar-cfdi-list').innerHTML = html;
 }
 
-function confirmarLiga(movId, uuid) {
-  const m = getMovBancarios().find(x=>x.id===movId);
-  if(m){ m.cfdi_uuid=uuid; showToast('✅ Ligado'); }
-  renderConciliacion();
+async function confirmarLiga(movId, uuid) {
+  try {
+    await db('PATCH', 'movimientos_bancarios?id=eq.'+movId, { cfdi_uuid: uuid });
+    showToast('✅ Ligado correctamente');
+    await loadAll(); renderConciliacion();
+  } catch(e){ showToast('Error al ligar en la base de datos', true); }
 }
 
 function rechazarSugerencia(movId) {
@@ -1522,10 +1535,12 @@ function rechazarSugerencia(movId) {
   renderConciliacion();
 }
 
-function desligar(movId) {
-  const m = getMovBancarios().find(x=>x.id===movId);
-  if(m){ delete m.cfdi_uuid; showToast('Desligado'); }
-  renderConciliacion();
+async function desligar(movId) {
+  try {
+    await db('PATCH', 'movimientos_bancarios?id=eq.'+movId, { cfdi_uuid: null });
+    showToast('Desligado correctamente');
+    await loadAll(); renderConciliacion();
+  } catch(e){ showToast('Error al desligar', true); }
 }
 
 // ── IMPORTAR MOVIMIENTOS DESDE EXCEL ──────────────────────
@@ -1658,27 +1673,30 @@ function showEdoPreview(errors=[]) {
   document.getElementById('edo-preview').innerHTML=html;
 }
 
-function saveEdoCuenta() {
+async function saveEdoCuenta() {
   if(!edoParsed.length) return;
   const cuentaId = document.getElementById('edo-cuenta-id').value;
   if(!cuentaId){ showToast('Selecciona la cuenta bancaria',true); return; }
   cuentaConcilActiva = cuentaId;
-  if(!movBancariosPorCuenta[cuentaId]) movBancariosPorCuenta[cuentaId]=[];
-  const existing = movBancariosPorCuenta[cuentaId];
-  let added=0, dupes=0;
-  edoParsed.forEach(m=>{
-    m.cuenta_id=cuentaId;
-    if(m.obra_nombre&&!m.obra_id){
-      const o=obras.find(x=>x.nombre.toLowerCase()===m.obra_nombre.toLowerCase());
-      if(o) m.obra_id=o.id;
-    }
-    const dup=existing.find(x=>x.fecha===m.fecha&&Math.abs(Math.abs(x.monto)-Math.abs(m.monto))<0.01&&(x.descripcion||'').slice(0,18)===(m.descripcion||'').slice(0,18));
-    if(!dup){ existing.push(m); added++; } else dupes++;
-  });
-  movBancariosPorCuenta[cuentaId].sort((a,b)=>a.fecha>b.fecha?1:-1);
-  const cta=cuentas.find(c=>c.id===cuentaId);
-  showToast(`✅ ${added} movimientos importados en "${cta?.nombre||''}"${dupes?` (${dupes} duplicados omitidos)`:''}`)  ;
-  closeSheet('edo-cuenta'); edoParsed=[]; concTab='pendientes'; renderConciliacion();
+  const btn = document.getElementById('edo-save-btn');
+  btn.textContent = 'Importando...'; btn.disabled = true;
+  let added = 0, errors = 0;
+  for(const m of edoParsed){
+    try {
+      m.cuenta_id = cuentaId;
+      if(m.obra_nombre && !m.obra_id){
+        const o = obras.find(x => x.nombre.toLowerCase() === m.obra_nombre.toLowerCase());
+        if(o) m.obra_id = o.id;
+      }
+      delete m.id;
+      await db('POST', 'movimientos_bancarios', m);
+      added++;
+    } catch(e){ errors++; }
+  }
+  showToast(`✅ ${added} movimientos importados a la base de datos${errors ? ` (${errors} errores)` : ''}`);
+  closeSheet('edo-cuenta'); edoParsed = []; concTab = 'pendientes';
+  await loadAll(); renderConciliacion();
+  btn.textContent = '✅ Importar movimientos'; btn.disabled = false;
 }
 
 // ── Exportar movimientos de la cuenta activa a Excel ──
