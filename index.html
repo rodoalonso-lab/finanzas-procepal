@@ -389,6 +389,18 @@ textarea.form-input{resize:vertical;min-height:80px}
 .pill-warn{background:rgba(244,168,74,.12);color:var(--warn)}
 .pill-err{background:rgba(255,77,106,.12);color:var(--danger)}
 .pill-info{background:rgba(77,142,255,.12);color:var(--accent2)}
+
+/* ── PLANEACIÓN MODULE ── */
+.plan-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.plan-tab{flex-shrink:0;padding:10px 14px;font-size:12px;font-weight:600;color:var(--dim);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;transition:color .2s,border-color .2s;margin-bottom:-1px}
+.plan-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.priority-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.vence-hoy{background:rgba(255,77,106,.15);color:var(--danger)}
+.vence-pronto{background:rgba(244,168,74,.15);color:var(--warn)}
+.vence-ok{background:rgba(0,209,140,.1);color:var(--success)}
+.plan-row{padding:12px 0;border-bottom:1px solid var(--border)}
+.plan-row:last-child{border-bottom:none}
+.plan-amount{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;letter-spacing:-.5px}
 </style>
 </head>
 <body>
@@ -428,6 +440,7 @@ textarea.form-input{resize:vertical;min-height:80px}
     <button class="nav-tab" onclick="setTab('conciliacion')" id="tab-conciliacion">Conciliación</button>
     <button class="nav-tab" onclick="setTab('cuentas')" id="tab-cuentas">Cuentas</button>
     <button class="nav-tab" onclick="setTab('reportes')" id="tab-reportes">Reportes</button>
+    <button class="nav-tab" onclick="setTab('planeacion')" id="tab-planeacion">📋 Planeación</button>
   </div>
   <div class="content" id="main-content"></div>
   <button class="fab" id="fab-btn" onclick="onFabClick()">＋</button>
@@ -636,6 +649,193 @@ textarea.form-input{resize:vertical;min-height:80px}
   </div>
 </div>
 
+
+<!-- SHEET: Nueva Cuenta por Pagar -->
+<div class="sheet-overlay" id="sheet-cxp">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title" id="sheet-cxp-title">Nueva Cuenta x Pagar</div>
+        <button class="sheet-close" onclick="closeSheet('cxp')">✕</button>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Razon / Proyecto *</div>
+      <select class="form-input" id="cxp-razon">
+        <option value="RAM">RAM</option><option value="RAL">RAL</option>
+        <option value="FINI">FINI</option><option value="PANORAMA">PANORAMA</option>
+        <option value="CLINICA">CLINICA</option><option value="SCHERIBERT">SCHERIBERT</option>
+        <option value="MEOR">MEOR</option><option value="GENERAL">GENERAL</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">Proyecto / Obra</div>
+      <select class="form-input" id="cxp-obra"></select></div>
+    <div class="form-group"><div class="form-label">Proveedor *</div>
+      <input class="form-input" id="cxp-proveedor" type="text" placeholder="Nombre del proveedor"></div>
+    <div class="form-group"><div class="form-label">Concepto *</div>
+      <input class="form-input" id="cxp-concepto" type="text" placeholder="Descripción del pago"></div>
+    <div class="form-group"><div class="form-label">Monto *</div>
+      <input class="form-input" id="cxp-monto" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group"><div class="form-label">No. Factura</div>
+      <input class="form-input" id="cxp-factura" type="text" placeholder="FAC-001"></div>
+    <div class="form-group"><div class="form-label">Fecha Vencimiento *</div>
+      <input class="form-input" id="cxp-vencimiento" type="date"></div>
+    <div class="form-group"><div class="form-label">Periodo</div>
+      <select class="form-input" id="cxp-periodo">
+        <option>ENERO</option><option>FEBRERO</option><option>MARZO</option>
+        <option>ABRIL</option><option>MAYO</option><option>JUNIO</option>
+        <option>JULIO</option><option>AGOSTO</option><option>SEPTIEMBRE</option>
+        <option>OCTUBRE</option><option>NOVIEMBRE</option><option>DICIEMBRE</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">Prioridad</div>
+      <select class="form-input" id="cxp-prioridad">
+        <option value="ALTA">🔴 Alta</option>
+        <option value="MEDIA" selected>🟡 Media</option>
+        <option value="BAJA">🟢 Baja</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">Estatus</div>
+      <select class="form-input" id="cxp-estatus">
+        <option value="PENDIENTE">Pendiente</option>
+        <option value="VENCIDO">Vencido</option>
+        <option value="PROXIMO">Próximo</option>
+        <option value="PAGADO">Pagado</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">Beneficiario / CLABE</div>
+      <input class="form-input" id="cxp-beneficiario" type="text" placeholder="Banco · CLABE o cuenta"></div>
+    <div class="form-group"><div class="form-label">Observaciones</div>
+      <textarea class="form-input" id="cxp-obs" placeholder="Notas adicionales" rows="2"></textarea></div>
+    <div class="form-group"><div class="form-label">Gestión</div>
+      <input class="form-input" id="cxp-gestion" type="text" placeholder="Responsable (ANDY, JAZ, BRENDA...)"></div>
+    <button class="btn btn-accent" id="cxp-save-btn" onclick="saveCXP()">Guardar</button>
+    <button class="btn btn-ghost" onclick="closeSheet('cxp')">Cancelar</button>
+  </div>
+</div>
+
+<!-- SHEET: Nueva Cuenta por Cobrar -->
+<div class="sheet-overlay" id="sheet-cxc">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title">Nueva Cuenta x Cobrar</div>
+        <button class="sheet-close" onclick="closeSheet('cxc')">✕</button>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Cliente *</div>
+      <input class="form-input" id="cxc-cliente" type="text" placeholder="Nombre del cliente"></div>
+    <div class="form-group"><div class="form-label">Negocio</div>
+      <select class="form-input" id="cxc-negocio">
+        <option value="RAL">RAL</option><option value="RAM">RAM</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">No. Factura</div>
+      <input class="form-input" id="cxc-factura" type="text" placeholder="FAC-001"></div>
+    <div class="form-group"><div class="form-label">Subtotal *</div>
+      <input class="form-input" id="cxc-subtotal" type="number" placeholder="0.00" step="0.01" oninput="calcCXC()"></div>
+    <div class="form-group"><div class="form-label">IVA</div>
+      <input class="form-input" id="cxc-iva" type="number" placeholder="0.00" step="0.01" oninput="calcCXC()"></div>
+    <div class="form-group"><div class="form-label">Monto Total</div>
+      <input class="form-input" id="cxc-monto" type="number" placeholder="0.00" readonly style="opacity:.7"></div>
+    <div class="form-group"><div class="form-label">Pagado</div>
+      <input class="form-input" id="cxc-pagado" type="number" placeholder="0.00" step="0.01" oninput="calcCXC()"></div>
+    <div class="form-group"><div class="form-label">Saldo Pendiente</div>
+      <input class="form-input" id="cxc-saldo" type="number" placeholder="0.00" readonly style="opacity:.7;color:var(--accent)"></div>
+    <div class="form-group"><div class="form-label">Obra / Proyecto</div>
+      <select class="form-input" id="cxc-obra"></select></div>
+    <div class="form-group"><div class="form-label">Fecha Vencimiento</div>
+      <input class="form-input" id="cxc-vencimiento" type="date"></div>
+    <div class="form-group"><div class="form-label">Observaciones</div>
+      <input class="form-input" id="cxc-obs" type="text" placeholder="Concepto o notas"></div>
+    <div class="form-group"><div class="form-label">Posible Pago</div>
+      <input class="form-input" id="cxc-posible" type="text" placeholder="Dictamen, Estimación, etc."></div>
+    <button class="btn btn-accent" id="cxc-save-btn" onclick="saveCXC()">Guardar</button>
+    <button class="btn btn-ghost" onclick="closeSheet('cxc')">Cancelar</button>
+  </div>
+</div>
+
+<!-- SHEET: Nueva Deuda Financiera -->
+<div class="sheet-overlay" id="sheet-deuda">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title">Nueva Deuda Financiera</div>
+        <button class="sheet-close" onclick="closeSheet('deuda')">✕</button>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Acreedor *</div>
+      <input class="form-input" id="deu-acreedor" type="text" placeholder="Banco, persona, institución"></div>
+    <div class="form-group"><div class="form-label">Tipo</div>
+      <select class="form-input" id="deu-tipo">
+        <option value="credito_bancario">Crédito bancario</option>
+        <option value="prestamo_personal">Préstamo personal</option>
+        <option value="tarjeta_credito">Tarjeta de crédito</option>
+        <option value="factoraje">Factoraje</option>
+        <option value="otro">Otro</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">Monto Original *</div>
+      <input class="form-input" id="deu-original" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group"><div class="form-label">Saldo Actual *</div>
+      <input class="form-input" id="deu-saldo" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group"><div class="form-label">Tasa de interés anual (%)</div>
+      <input class="form-input" id="deu-tasa" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group"><div class="form-label">Pago mensual</div>
+      <input class="form-input" id="deu-pago-mensual" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group"><div class="form-label">Fecha próximo pago</div>
+      <input class="form-input" id="deu-prox-pago" type="date"></div>
+    <div class="form-group"><div class="form-label">Fecha vencimiento total</div>
+      <input class="form-input" id="deu-vencimiento" type="date"></div>
+    <div class="form-group"><div class="form-label">Negocio / Razon</div>
+      <select class="form-input" id="deu-negocio">
+        <option value="RAL">RAL</option><option value="RAM">RAM</option><option value="GENERAL">GENERAL</option>
+      </select></div>
+    <div class="form-group"><div class="form-label">Observaciones</div>
+      <textarea class="form-input" id="deu-obs" placeholder="Notas" rows="2"></textarea></div>
+    <button class="btn btn-accent" id="deu-save-btn" onclick="saveDeuda()">Guardar</button>
+    <button class="btn btn-ghost" onclick="closeSheet('deuda')">Cancelar</button>
+  </div>
+</div>
+
+
+<!-- SHEET: Importar Excel Planeación -->
+<div class="sheet-overlay" id="sheet-import-plan">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title">Importar desde Excel</div>
+        <button class="sheet-close" onclick="closeSheet('import-plan');resetImportPlan()">✕</button>
+      </div>
+    </div>
+
+    <!-- Selector de tipo -->
+    <div class="form-group">
+      <div class="form-label">¿Qué tabla vas a importar?</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="ibtn-cxp"   onclick="setImportTipo('cxp')"   style="flex:1;padding:10px 8px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:'Space Grotesk',sans-serif">📤 CxP</button>
+        <button id="ibtn-cxc"   onclick="setImportTipo('cxc')"   style="flex:1;padding:10px 8px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:'Space Grotesk',sans-serif">📥 CxC</button>
+        <button id="ibtn-deuda" onclick="setImportTipo('deuda')" style="flex:1;padding:10px 8px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:'Space Grotesk',sans-serif">🏦 Deuda</button>
+      </div>
+    </div>
+
+    <!-- Info de columnas esperadas -->
+    <div id="import-col-hint" style="background:var(--accent2-dim);border:1px solid var(--accent2)33;border-radius:10px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--text2);line-height:1.6;display:none"></div>
+
+    <!-- Upload zone -->
+    <div class="upload-zone" id="import-upload-zone" onclick="document.getElementById('import-file-input').click()" style="display:none">
+      <input type="file" id="import-file-input" accept=".xlsx,.xls" onchange="onImportFileSelected(this.files)">
+      <div style="font-size:28px;margin-bottom:8px">📊</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">Seleccionar archivo Excel</div>
+      <div style="font-size:11px;color:var(--dim)">Tu archivo actual tal como está</div>
+    </div>
+
+    <!-- Preview -->
+    <div id="import-preview" style="margin-top:10px"></div>
+
+    <!-- Botones -->
+    <button class="btn btn-accent" id="import-save-btn" onclick="executeImport()" style="display:none;margin-top:8px">⬆️ Importar a Supabase</button>
+    <button class="btn btn-ghost" onclick="closeSheet('import-plan');resetImportPlan()">Cancelar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -720,6 +920,9 @@ async function loadAll() {
   try { obras = await db('GET','obras?order=nombre') || []; } catch(e){ obras=[]; }
   try { cfdiEmitidos = await db('GET','cfdi_emitidos?order=fecha.desc') || []; } catch(e){ cfdiEmitidos=[]; }
   try { cfdiRecibidos = await db('GET','cfdi_recibidos?order=fecha.desc') || []; } catch(e){ cfdiRecibidos=[]; }
+  try { cxpData   = await db('GET','cuentas_por_pagar?order=fecha_vencimiento.asc') || []; } catch(e){ cxpData=[]; }
+  try { cxcData   = await db('GET','cuentas_por_cobrar?order=fecha_vencimiento.asc') || []; } catch(e){ cxcData=[]; }
+  try { deudaData = await db('GET','deuda_financiera?order=created_at.desc') || []; } catch(e){ deudaData=[]; }
   try {
     movBancariosDB = await db('GET','movimientos_bancarios?order=fecha.desc') || [];
     movBancariosPorCuenta = {};
@@ -737,8 +940,8 @@ function setTab(tab) {
   const t = document.getElementById('tab-'+tab);
   if(t){ t.classList.add('active'); t.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}); }
   const fab = document.getElementById('fab-btn');
-  fab.style.display = ['egresos','ingresos','cuentas','cfdi','conciliacion'].includes(tab) ? 'flex' : 'none';
-  const renders = {dashboard:renderDashboard,cuentas:renderCuentas,egresos:()=>renderMovLista('egreso'),ingresos:()=>renderMovLista('ingreso'),cfdi:renderCFDI,conciliacion:renderConciliacion,reportes:renderReportes};
+  fab.style.display = ['egresos','ingresos','cuentas','cfdi','conciliacion','planeacion'].includes(tab) ? 'flex' : 'none';
+  const renders = {dashboard:renderDashboard,cuentas:renderCuentas,egresos:()=>renderMovLista('egreso'),ingresos:()=>renderMovLista('ingreso'),cfdi:renderCFDI,conciliacion:renderConciliacion,reportes:renderReportes,planeacion:renderPlaneacion};
   if(renders[tab]) renders[tab]();
 }
 
@@ -746,6 +949,7 @@ function onFabClick() {
   if(currentTab==='cuentas') openNewCuenta();
   else if(currentTab==='cfdi') openNewCFDI();
   else if(currentTab==='conciliacion') openImportEdo();
+  else if(currentTab==='planeacion') openNewPlan();
   else openNewMov(currentTab==='ingresos'?'ingreso':'egreso');
 }
 
@@ -863,6 +1067,45 @@ function renderDashboard() {
       </div>`;
     });
     html += '</div>';
+  }
+
+  // ── Resumen Planeación en Dashboard ──────────────────
+  const vencidasHoy = cxpData.filter(x=>x.estatus!=='PAGADO'&&diasParaVencer(x.fecha_vencimiento)<=0).length;
+  const proximas7   = cxpData.filter(x=>x.estatus!=='PAGADO'&&diasParaVencer(x.fecha_vencimiento)>0&&diasParaVencer(x.fecha_vencimiento)<=7).length;
+  const totalCXP    = cxpData.filter(x=>x.estatus!=='PAGADO').reduce((s,x)=>s+(x.monto||0),0);
+  const totalCXC    = cxcData.reduce((s,x)=>s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0))),0);
+  const totalDeuda  = deudaData.reduce((s,x)=>s+(x.saldo_actual||0),0);
+  if(cxpData.length||cxcData.length||deudaData.length) {
+    html += `<div class="section-title">Planeación Financiera</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="list-item">
+        <div class="item-icon" style="background:rgba(255,77,106,.1)">📤</div>
+        <div style="flex:1"><div class="item-main">Cuentas por Pagar</div>
+          <div class="item-sub">${vencidasHoy?`<span style="color:var(--danger)">${vencidasHoy} vencidas</span> · `:''}${proximas7?`${proximas7} próx 7d · `:''}${cxpData.filter(x=>x.estatus!=='PAGADO').length} pendientes</div>
+        </div>
+        <div class="item-amount" style="color:var(--danger)">${fmt(totalCXP)}</div>
+      </div>
+      <div class="list-item">
+        <div class="item-icon" style="background:rgba(0,209,140,.1)">📥</div>
+        <div style="flex:1"><div class="item-main">Cuentas por Cobrar</div>
+          <div class="item-sub">${cxcData.length} facturas pendientes</div>
+        </div>
+        <div class="item-amount" style="color:var(--success)">${fmt(totalCXC)}</div>
+      </div>
+      <div class="list-item" style="border:none">
+        <div class="item-icon" style="background:rgba(155,126,255,.1)">🏦</div>
+        <div style="flex:1"><div class="item-main">Deuda Financiera</div>
+          <div class="item-sub">${deudaData.length} créditos activos</div>
+        </div>
+        <div class="item-amount" style="color:var(--purple)">${fmt(totalDeuda)}</div>
+      </div>
+    </div>
+    ${vencidasHoy?`<div style="background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.2);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⚠️</span>
+      <div><div style="font-size:13px;font-weight:700;color:var(--danger)">${vencidasHoy} cuenta(s) vencida(s)</div>
+      <div class="item-sub">Revisa la pestaña Planeación</div></div>
+      <button onclick="setTab('planeacion')" style="margin-left:auto;padding:6px 12px;border-radius:8px;background:var(--danger);color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif">Ver</button>
+    </div>`:''}`;
   }
 
   document.getElementById('main-content').innerHTML = html;
@@ -1234,6 +1477,10 @@ let cfdiMasivoParsed = [];
 // movBancarios is now a dict keyed by cuenta_id: { 'cuenta_id': [{...mov...}] }
 let movBancariosPorCuenta = {};
 let movBancariosDB = [];
+let cxpData = [];       // cuentas por pagar
+let cxcData = [];       // cuentas por cobrar
+let deudaData = [];     // deuda financiera
+let _planTab = 'cxp';  // sub-tab activo
 let cuentaConcilActiva = null; // cuenta_id currently selected in conciliacion
 let concTab = 'pendientes';
 let ligandoMovId = null;
@@ -1926,6 +2173,619 @@ function exportarMes(mes) {
   const saved = localStorage.getItem('fin_session');
   if(saved){ try{ const s=JSON.parse(saved); currentUser={nombre:s.nombre,rol:s.rol,email:s.email}; await loadAll(); initApp(); }catch(e){ localStorage.removeItem('fin_session'); } }
 })();
+
+
+// ── PLANEACIÓN FINANCIERA ─────────────────────────────────────────────
+
+function diasParaVencer(f) {
+  if(!f) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return Math.round((new Date(f+'T12:00:00') - hoy) / 86400000);
+}
+
+function venceBadge(f, estatus) {
+  if(estatus==='PAGADO') return '<span style="background:rgba(90,107,138,.2);color:var(--dim);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">Pagado</span>';
+  const d = diasParaVencer(f);
+  if(d===null) return '';
+  if(d<0)  return '<span style="background:rgba(255,77,106,.15);color:var(--danger);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">Vencido '+Math.abs(d)+'d</span>';
+  if(d===0) return '<span style="background:rgba(255,77,106,.15);color:var(--danger);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">Hoy</span>';
+  if(d<=7)  return '<span style="background:rgba(244,168,74,.15);color:var(--warn);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">'+d+'d</span>';
+  return '<span style="background:rgba(0,209,140,.1);color:var(--success);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">'+d+'d</span>';
+}
+
+function prioColor(p) {
+  return p==='ALTA'?'var(--danger)':p==='MEDIA'?'var(--warn)':'var(--success)';
+}
+
+function renderPlaneacion() {
+  const el = document.getElementById('main-content');
+  if(!el) return;
+
+  const totalCXP   = cxpData.filter(function(x){return x.estatus!=='PAGADO';}).reduce(function(s,x){return s+(x.monto||0);},0);
+  const totalCXC   = cxcData.reduce(function(s,x){return s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)));},0);
+  const totalDeuda = deudaData.reduce(function(s,x){return s+(x.saldo_actual||0);},0);
+  const vencidas   = cxpData.filter(function(x){return x.estatus==='VENCIDO';}).length;
+
+  let html = '';
+
+  // KPIs
+  html += '<div class="stat-grid" style="margin-bottom:14px">';
+  html += '<div class="stat-box" style="border-color:rgba(255,77,106,.3)"><div class="stat-label" style="color:var(--danger)">Por Pagar</div><div class="stat-val" style="color:var(--danger);font-size:17px">'+fmt(totalCXP)+'</div><div class="stat-sub">'+vencidas+' vencidas</div></div>';
+  html += '<div class="stat-box" style="border-color:rgba(0,209,140,.3)"><div class="stat-label" style="color:var(--success)">Por Cobrar</div><div class="stat-val" style="color:var(--success);font-size:17px">'+fmt(totalCXC)+'</div><div class="stat-sub">'+cxcData.length+' facturas</div></div>';
+  html += '<div class="stat-box" style="border-color:rgba(155,126,255,.3)"><div class="stat-label" style="color:var(--purple)">Deuda Total</div><div class="stat-val" style="color:var(--purple);font-size:17px">'+fmt(totalDeuda)+'</div><div class="stat-sub">'+deudaData.length+' créditos</div></div>';
+  var pos = totalCXC - totalCXP;
+  html += '<div class="stat-box" style="border-color:rgba(77,142,255,.3)"><div class="stat-label" style="color:var(--accent2)">Posición Neta</div><div class="stat-val" style="color:'+(pos>=0?'var(--success)':'var(--danger)')+';font-size:17px">'+fmt(pos)+'</div><div class="stat-sub">CxC - CxP</div></div>';
+  html += '</div>';
+
+  // Sub-tabs + botón importar
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+  html += '<div class="plan-tabs" style="border:none;margin-bottom:0;flex:1">';
+  var tabs = [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcData.length+')'],['deuda','🏦 Deuda ('+deudaData.length+')']];
+  tabs.forEach(function(t) {
+    html += '<button class="plan-tab'+(_planTab===t[0]?' active':'')+'" onclick="setPlanTab(\''+t[0]+'\')">'+t[1]+'</button>';
+  });
+  html += '</div>';
+  html += '<button onclick="openImportPlaneacion()" style="flex-shrink:0;padding:6px 12px;border-radius:8px;background:var(--accent2-dim);border:1px solid var(--accent2);color:var(--accent2);font-size:11px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif;white-space:nowrap;margin-left:8px">📊 Importar</button>';
+  html += '</div>';
+  html += '<div style="height:1px;background:var(--border);margin-bottom:14px"></div>';
+
+  if(_planTab==='cxp')        html += renderCXPList();
+  else if(_planTab==='cxc')   html += renderCXCList();
+  else                         html += renderDeudaList();
+
+  el.innerHTML = html;
+}
+
+function setPlanTab(tab) { _planTab = tab; renderPlaneacion(); }
+function setCuentaConcilF(id) { cuentaConcilActiva = id; renderFinanzas(); }
+
+// ── CXP ───────────────────────────────────────────────────────────────
+function renderCXPList() {
+  if(!cxpData.length) return '<div class="empty"><div class="empty-icon">📤</div><div class="empty-title">Sin cuentas por pagar</div><div class="empty-sub">Toca + para registrar</div></div>';
+
+  var filtrosEstatus = window._cxpFiltrosEstatus || ['VENCIDO','PENDIENTE','PROXIMO'];
+  var filtroRazon    = window._cxpFiltroRazon    || '';
+  var filtroProyecto = window._cxpFiltroProyecto || '';
+  var filtroGestion  = window._cxpFiltroGestion  || '';
+  var filtroBusq     = (window._cxpBusq||'').toLowerCase();
+
+  var razonesDisp   = [...new Set(cxpData.map(function(x){return x.razon;}).filter(Boolean))].sort();
+  var proyectosDisp = [...new Set(cxpData.map(function(x){return x.obra_nombre;}).filter(Boolean))].sort();
+  var gestionDisp   = [...new Set(cxpData.map(function(x){return x.gestion;}).filter(Boolean))].sort();
+
+  // Filtrar
+  var itemsAll = cxpData.filter(function(x) {
+    if(filtroBusq && !(x.proveedor||'').toLowerCase().includes(filtroBusq) && !(x.concepto||'').toLowerCase().includes(filtroBusq) && !(x.observaciones||'').toLowerCase().includes(filtroBusq)) return false;
+    if(filtroRazon    && (x.razon||'')!==filtroRazon)        return false;
+    if(filtroProyecto && (x.obra_nombre||'')!==filtroProyecto) return false;
+    if(filtroGestion  && (x.gestion||'')!==filtroGestion)    return false;
+    return true;
+  });
+
+  var totalPend = itemsAll.filter(function(x){return x.estatus!=='PAGADO'&&filtrosEstatus.includes(x.estatus||'PENDIENTE');}).reduce(function(s,x){return s+(x.monto||0);},0);
+  var totalVenc = itemsAll.filter(function(x){return x.estatus==='VENCIDO';}).reduce(function(s,x){return s+(x.monto||0);},0);
+  var totalPag  = itemsAll.filter(function(x){return x.estatus==='PAGADO';}).reduce(function(s,x){return s+(x.monto||0);},0);
+
+  var ss = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;cursor:pointer';
+  var html = '';
+
+  // KPIs
+  html += '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  html += '<div><div class="stat-label" style="color:var(--danger)">Por Pagar</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--danger)">'+fmt(totalPend)+'</div></div>';
+  html += '<div><div class="stat-label" style="color:var(--warn)">Vencido</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--warn)">'+fmt(totalVenc)+'</div></div>';
+  html += '<div><div class="stat-label" style="color:var(--success)">Pagado</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--success)">'+fmt(totalPag)+'</div></div>';
+  html += '</div>';
+
+  // Buscador
+  html += '<input type="text" placeholder="Buscar proveedor, concepto..." value="'+(window._cxpBusq||'')+'" oninput="window._cxpBusq=this.value;renderPlaneacion()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;margin-bottom:8px">';
+
+  // Selects
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">';
+  html += '<select onchange="window._cxpFiltroRazon=this.value;renderPlaneacion()" style="'+ss+';flex:1;min-width:100px"><option value="">Razón: Todas</option>';
+  razonesDisp.forEach(function(r){ html += '<option value="'+r+'"'+(filtroRazon===r?' selected':'')+'>'+r+'</option>'; });
+  html += '</select>';
+  html += '<select onchange="window._cxpFiltroProyecto=this.value;renderPlaneacion()" style="'+ss+';flex:2;min-width:140px"><option value="">Proyecto: Todos</option>';
+  proyectosDisp.forEach(function(p){ html += '<option value="'+p+'"'+(filtroProyecto===p?' selected':'')+'>'+p+'</option>'; });
+  html += '</select>';
+  html += '<select onchange="window._cxpFiltroGestion=this.value;renderPlaneacion()" style="'+ss+';flex:1;min-width:100px"><option value="">Gestión: Todos</option>';
+  gestionDisp.forEach(function(g){ html += '<option value="'+g+'"'+(filtroGestion===g?' selected':'')+'>'+g+'</option>'; });
+  html += '</select>';
+  html += '</div>';
+
+  // Chips estatus
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
+  html += '<span style="font-size:10px;font-weight:700;color:var(--dim);letter-spacing:1px">ESTATUS:</span>';
+  var estColors = {VENCIDO:'var(--danger)',PENDIENTE:'var(--text)',PROXIMO:'var(--warn)',PAGADO:'var(--dim)'};
+  var estBgs    = {VENCIDO:'rgba(255,77,106,.12)',PENDIENTE:'rgba(228,235,248,.12)',PROXIMO:'rgba(244,168,74,.12)',PAGADO:'rgba(90,107,138,.12)'};
+  ['VENCIDO','PENDIENTE','PROXIMO','PAGADO'].forEach(function(est) {
+    var sel = filtrosEstatus.includes(est);
+    var c   = estColors[est];
+    var bg  = sel ? estBgs[est] : 'transparent';
+    var bdr = sel ? c : 'var(--border)';
+    html += '<button onclick="toggleCXPEstatus(\''+est+'\')" style="padding:4px 11px;border-radius:20px;border:1px solid '+bdr+';background:'+bg+';color:'+(sel?c:'var(--dim)')+';font-size:11px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">'+est+'</button>';
+  });
+  html += '<button onclick="resetCXPFiltros()" style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);font-size:10px;cursor:pointer;font-family:Space Grotesk,sans-serif;margin-left:auto">↺ Limpiar</button>';
+  html += '</div>';
+
+  // Agrupar y renderizar
+  var orden = ['VENCIDO','PENDIENTE','PROXIMO','PAGADO'];
+  var grupos = {};
+  itemsAll.forEach(function(x) {
+    var g = x.estatus||'PENDIENTE';
+    if(!grupos[g]) grupos[g] = [];
+    grupos[g].push(x);
+  });
+
+  var hayItems = false;
+  orden.forEach(function(est) {
+    if(!filtrosEstatus.includes(est)) return;
+    var items = grupos[est]||[];
+    if(!items.length) return;
+    hayItems = true;
+    var totalG  = items.reduce(function(s,x){return s+(x.monto||0);},0);
+    var colG    = est==='VENCIDO'?'var(--danger)':est==='PAGADO'?'var(--dim)':est==='PROXIMO'?'var(--warn)':'var(--text)';
+
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px">';
+    html += '<div class="section-title" style="color:'+colG+';margin:0;flex:1">'+est+' <span style="color:var(--dim);font-size:10px">('+items.length+')</span></div>';
+    html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:'+colG+'">'+fmt(totalG)+'</span>';
+    html += '</div>';
+    html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:4px">';
+
+    items.forEach(function(x, i) {
+      var isAdmin = currentUser.rol==='director'||currentUser.rol==='admin';
+      var expId   = 'cxp-exp-'+x.id;
+      var dias    = diasParaVencer(x.fecha_vencimiento);
+      var diasStr = '';
+      if(dias!==null && est!=='PAGADO') {
+        if(dias<0)  diasStr = '<span style="color:var(--danger);font-size:10px;font-weight:700">'+Math.abs(dias)+'d vencido</span>';
+        else if(dias===0) diasStr = '<span style="color:var(--danger);font-size:10px;font-weight:700">Hoy</span>';
+        else diasStr = '<span style="color:'+(dias<=7?'var(--warn)':'var(--dim)')+';font-size:10px">'+dias+'d</span>';
+      }
+      var bdrBot = i<items.length-1?'1px solid var(--border)':'none';
+
+      html += '<div style="border-bottom:'+bdrBot+'">';
+      html += '<div onclick="toggleCXP(\''+expId+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+      html += '<span style="font-size:13px;font-weight:700">'+(x.proveedor||'—')+'</span>';
+      if(x.razon) html += '<span style="font-size:10px;color:var(--dim)">'+x.razon+'</span>';
+      if(x.obra_nombre) html += '<span style="font-size:10px;color:var(--accent2)">🏗 '+x.obra_nombre+'</span>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap">';
+      if(x.periodo)   html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);padding:1px 6px;border-radius:20px">'+x.periodo+'</span>';
+      if(x.prioridad) html += '<span style="font-size:10px;color:'+prioColor(x.prioridad)+';font-weight:700">'+x.prioridad+'</span>';
+      if(x.gestion)   html += '<span style="font-size:10px;color:var(--dim)">👤'+x.gestion+'</span>';
+      if(diasStr)     html += diasStr;
+      html += '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">';
+      html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:var(--danger)">'+fmt(x.monto||0)+'</span>';
+      html += '<span id="'+expId+'-arrow" style="color:var(--dim);font-size:12px;transition:transform .2s">▼</span>';
+      html += '</div>';
+      html += '</div>';
+
+      // Detalle
+      html += '<div id="'+expId+'" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border);background:var(--bg)">';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:10px 0">';
+      if(x.concepto)          html += '<div><div class="stat-label">Concepto</div><div style="font-size:12px">'+x.concepto+'</div></div>';
+      if(x.factura)           html += '<div><div class="stat-label">Factura</div><div style="font-size:12px">'+x.factura+'</div></div>';
+      if(x.fecha_vencimiento) html += '<div><div class="stat-label">Vencimiento</div><div style="font-size:12px">'+fmtDate(x.fecha_vencimiento)+'</div></div>';
+      if(x.beneficiario)      html += '<div><div class="stat-label">Beneficiario</div><div style="font-size:12px">'+x.beneficiario+'</div></div>';
+      if(x.observaciones)     html += '<div style="grid-column:1/-1"><div class="stat-label">Observaciones</div><div style="font-size:12px;color:var(--text2)">'+x.observaciones+'</div></div>';
+      html += '</div>';
+      if(isAdmin) {
+        html += '<div style="display:flex;gap:8px;margin-top:6px">';
+        html += '<button onclick="marcarPagadoCXP(\''+x.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--success);background:rgba(0,209,140,.08);color:var(--success);font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">✓ Marcar pagado</button>';
+        html += '<button onclick="deleteCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑</button>';
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  if(!hayItems) html += '<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Sin resultados</div><div class="empty-sub">Ajusta los filtros</div></div>';
+  return html;
+}
+
+function toggleCXP(id) {
+  var el = document.getElementById(id);
+  var arrow = document.getElementById(id+'-arrow');
+  if(!el) return;
+  var open = el.style.display==='block';
+  el.style.display = open?'none':'block';
+  if(arrow) arrow.style.transform = open?'':'rotate(180deg)';
+}
+
+function toggleCXPEstatus(est) {
+  if(!window._cxpFiltrosEstatus) window._cxpFiltrosEstatus = ['VENCIDO','PENDIENTE','PROXIMO'];
+  var idx = window._cxpFiltrosEstatus.indexOf(est);
+  if(idx>=0) window._cxpFiltrosEstatus.splice(idx,1);
+  else window._cxpFiltrosEstatus.push(est);
+  renderPlaneacion();
+}
+
+function resetCXPFiltros() {
+  window._cxpBusq=''; window._cxpFiltrosEstatus=['VENCIDO','PENDIENTE','PROXIMO'];
+  window._cxpFiltroRazon=''; window._cxpFiltroProyecto=''; window._cxpFiltroGestion='';
+  renderPlaneacion();
+}
+
+function resetCXCFiltros() {
+  window._cxcBusq=''; window._cxcCliente=''; window._cxcNegocio='';
+  window._cxcObra=''; window._cxcEstatus='pendiente';
+  renderPlaneacion();
+}
+
+
+// ── IMPORTADOR DE EXCEL — PLANEACIÓN ─────────────────────────────────
+
+let _importTipo = null;
+let _importParsed = [];
+
+const IMPORT_HINTS = {
+  cxp: {
+    label: 'Cuentas por Pagar',
+    cols: 'RAZON · PROYECTO · PROVEEDOR · ESTATUS · PRIORIDAD · PERIODO · MONTO · OBSERVACIONES · COMENTARIOS · BENEFICIARIO · CUENTA/CLABE · GESTION · PROGRAMACION A PAGO',
+    map: function(row) {
+      // Acepta nombres de columna en mayúsculas o minúsculas, con variantes
+      const get = (keys) => {
+        for(const k of keys) {
+          const v = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
+          if(v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+        }
+        return null;
+      };
+      const montoRaw = get(['MONTO','monto','Monto','IMPORTE','importe']);
+      // Handle Excel formulas like '=1966.2', currency strings, dates
+      const montoClean = montoRaw ? String(montoRaw).replace(/^=|[$,\s]/g,'').trim() : '0';
+      const monto = parseFloat(montoClean) || 0;
+      if(!monto) return null; // Skip filas sin monto
+      const proveedor = get(['PROVEEDOR','proveedor','Proveedor','NOMBRE','nombre']);
+      if(!proveedor) return null;
+      return {
+        razon:          get(['RAZON','razon','Razon','RAZ','raz'])||'GENERAL',
+        obra_nombre:    get(['PROYECTO','proyecto','Proyecto','OBRA','obra'])||null,
+        proveedor,
+        concepto:       get(['OBSERVACIONES','observaciones','CONCEPTO','concepto','Concepto'])||null,
+        monto,
+        factura:        get(['FACTURA','factura','FAC','fac','NO FAC'])||null,
+        fecha_vencimiento: parseExcelDate(get(['FECHA VENCIMIENTO','fecha vencimiento','VENCIMIENTO','vencimiento','PROGRAMACION A PAGO','programacion a pago'])),
+        periodo:        get(['PERIODO','periodo','Periodo','MES','mes'])||null,
+        prioridad:      normalizePrioridad(get(['PRIORIDAD','prioridad','Prioridad'])),
+        estatus:        normalizeEstatus(get(['ESTATUS','estatus','Estatus','STATUS','status'])),
+        beneficiario:   get(['BENEFICIARIO','beneficiario','NOMBRE BENEFICIARIO'])||null,
+        observaciones:  get(['COMENTARIOS','comentarios','NOTAS','notas','Comentarios'])||null,
+        gestion:        get(['GESTION','gestion','Gestion','GESTIÓN','gestión','RESPONSABLE'])||null,
+      };
+    }
+  },
+  cxc: {
+    label: 'Cuentas por Cobrar',
+    cols: 'CLIENTE · NEG · FAC · SUBTOTAL · IVA · FACTORAJE · MONTO · PAGADO · SALDO · OBRA · FECHA DE FACTURA · VENCIMIENTO · OBSERVACIONES · POSIBLE PAGO',
+    map: function(row) {
+      const get = (keys) => {
+        for(const k of keys) {
+          // Exact match first
+          if(row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return String(row[k]).trim();
+          // Case-insensitive match
+          const found = Object.keys(row).find(rk => rk.trim().toUpperCase() === k.toUpperCase());
+          if(found && row[found] !== null && String(row[found]).trim() !== '') return String(row[found]).trim();
+        }
+        return null;
+      };
+      const getNum = (keys) => {
+        const v = get(keys);
+        if(!v) return 0;
+        // Handle formula result strings, numbers with commas/currency
+        const clean = String(v).replace(/[$,\s=]/g,'').trim();
+        const n = parseFloat(clean);
+        return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+      };
+
+      const cliente = get(['CLIENTE','cliente']);
+      // Skip totals row, empty rows, header repetitions
+      if(!cliente) return null;
+      if(/^TOTAL/i.test(cliente)) return null;
+      if(cliente.toUpperCase() === 'CLIENTE') return null;
+
+      const monto    = getNum(['MONTO','monto','TOTAL']);
+      const subtotal = getNum(['SUBTOTAL','subtotal']);
+      const iva      = getNum(['IVA','iva']);
+      const pagado   = getNum(['PAGADO','pagado']);
+      // Calculate saldo: prefer cell value, fallback to monto - pagado
+      let saldo = getNum(['SALDO','saldo']);
+      if(!saldo && monto) saldo = Math.max(0, Math.round((monto - pagado) * 100) / 100);
+
+      // Need at least a monto or saldo to be useful
+      if(!monto && !saldo) return null;
+
+      const facRaw = get(['FAC','fac','FACTURA','factura','NO. FAC']);
+
+      return {
+        cliente,
+        negocio:          get(['NEG','neg','NEGOCIO','negocio'])||null,
+        factura:          facRaw||null,
+        subtotal:         subtotal || Math.round((monto/1.16)*100)/100,
+        iva:              iva || Math.round((monto - monto/1.16)*100)/100,
+        monto,
+        pagado,
+        saldo,
+        obra_nombre:      get(['OBRA','obra','PROYECTO','proyecto'])||null,
+        fecha_factura:    parseExcelDate(get(['FECHA DE FACTURA','FECHA FACTURA','fecha de factura','fecha factura','FECHA'])),
+        fecha_vencimiento:parseExcelDate(get(['VENCIMIENTO','vencimiento','FECHA VENCIMIENTO'])),
+        observaciones:    get(['OBSERVACIONES','observaciones'])||null,
+        posible_pago:     get(['POSIBLE PAGO','posible pago','POSIBLE_PAGO'])||null,
+      };
+    }
+  },
+  deuda: {
+    label: 'Deuda Financiera',
+    cols: 'ACREEDOR · TIPO · MONTO ORIGINAL · SALDO ACTUAL · TASA INTERES · PAGO MENSUAL · PROXIMO PAGO · VENCIMIENTO · NEGOCIO · OBSERVACIONES',
+    map: function(row) {
+      const get = (keys) => {
+        for(const k of keys) {
+          const v = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
+          if(v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+        }
+        return null;
+      };
+      const acreedor = get(['ACREEDOR','acreedor','BANCO','banco','INSTITUCIÓN','PROVEEDOR']);
+      if(!acreedor) return null;
+      const saldo = parseFloat(String(get(['SALDO ACTUAL','saldo actual','SALDO','saldo','MONTO','monto'])||'0').replace(/[$,\s]/g,''))||0;
+      if(!saldo) return null;
+      return {
+        acreedor,
+        tipo:             get(['TIPO','tipo','TYPE'])||'otro',
+        monto_original:   parseFloat(String(get(['MONTO ORIGINAL','monto original','ORIGINAL'])||'0').replace(/[$,\s]/g,''))||saldo,
+        saldo_actual:     saldo,
+        tasa_interes:     parseFloat(String(get(['TASA','tasa','TASA INTERES','tasa interes','TASA %'])||'0').replace(/[%,\s]/g,''))||null,
+        pago_mensual:     parseFloat(String(get(['PAGO MENSUAL','pago mensual','PAGO'])||'0').replace(/[$,\s]/g,''))||null,
+        fecha_proximo_pago: parseExcelDate(get(['PROXIMO PAGO','proximo pago','PRÓXIMO PAGO','FECHA PAGO'])),
+        fecha_vencimiento:  parseExcelDate(get(['VENCIMIENTO','vencimiento','FECHA VENCIMIENTO'])),
+        negocio:          get(['NEGOCIO','negocio','EMPRESA','empresa','RAZ','razon','RAZON'])||null,
+        observaciones:    get(['OBSERVACIONES','observaciones','NOTAS','notas'])||null,
+      };
+    }
+  }
+};
+
+// ── Helpers de normalización ──────────────────────────────────────────
+function normalizePrioridad(v) {
+  if(!v) return 'MEDIA';
+  const u = v.toUpperCase();
+  if(u.includes('ALT')) return 'ALTA';
+  if(u.includes('BAJ')) return 'BAJA';
+  return 'MEDIA';
+}
+function normalizeEstatus(v) {
+  if(!v) return 'PENDIENTE';
+  const u = v.toUpperCase();
+  if(u.includes('VENC')) return 'VENCIDO';
+  if(u.includes('PROX')) return 'PROXIMO';
+  if(u.includes('PAG'))  return 'PAGADO';
+  return 'PENDIENTE';
+}
+function parseExcelDate(v) {
+  if(!v) return null;
+  // If it's already a Date object (from XLSX with cellDates:true)
+  if(v instanceof Date) {
+    const y=v.getFullYear(), mo=String(v.getMonth()+1).padStart(2,'0'), d=String(v.getDate()).padStart(2,'0');
+    return `${y}-${mo}-${d}`;
+  }
+  const s = String(v).trim();
+  if(!s || s==='null' || s==='undefined') return null;
+  // DD/MM/YYYY or DD-MM-YYYY
+  let m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  // YYYY-MM-DD
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  // Excel serial number (5 digits)
+  if(/^\d{5}$/.test(s)) {
+    try {
+      if(typeof XLSX!=='undefined') {
+        const d = XLSX.SSF.parse_date_code(parseInt(s));
+        if(d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+      }
+    } catch(e){}
+  }
+  // JS Date string e.g. "Mon Jul 17 2025 00:00:00"
+  try {
+    const d = new Date(s);
+    if(!isNaN(d.getTime()) && d.getFullYear() > 2000) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+  } catch(e){}
+  return null;
+}
+
+// ── UI functions ──────────────────────────────────────────────────────
+function openImportPlaneacion() {
+  resetImportPlan();
+  openSheet('import-plan');
+}
+
+function resetImportPlan() {
+  _importTipo = null; _importParsed = [];
+  ['ibtn-cxp','ibtn-cxc','ibtn-deuda'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.style.background='var(--surface)'; el.style.borderColor='var(--border)'; el.style.color='var(--text)'; }
+  });
+  const hint = document.getElementById('import-col-hint');
+  const zone = document.getElementById('import-upload-zone');
+  const prev = document.getElementById('import-preview');
+  const btn  = document.getElementById('import-save-btn');
+  if(hint){ hint.style.display='none'; hint.innerHTML=''; }
+  if(zone) zone.style.display='none';
+  if(prev) prev.innerHTML='';
+  if(btn)  btn.style.display='none';
+  const inp = document.getElementById('import-file-input');
+  if(inp) inp.value='';
+}
+
+function setImportTipo(tipo) {
+  _importTipo = tipo; _importParsed = [];
+  ['cxp','cxc','deuda'].forEach(t => {
+    const btn = document.getElementById('ibtn-'+t);
+    const active = t===tipo;
+    if(btn){
+      btn.style.background  = active?'var(--accent-dim)':'var(--surface)';
+      btn.style.borderColor = active?'var(--accent)':'var(--border)';
+      btn.style.color       = active?'var(--accent)':'var(--text)';
+    }
+  });
+  const hint = document.getElementById('import-col-hint');
+  const zone = document.getElementById('import-upload-zone');
+  if(hint){
+    hint.innerHTML = `<strong style="color:var(--accent2)">${IMPORT_HINTS[tipo].label}</strong><br>Columnas detectadas automáticamente:<br>${IMPORT_HINTS[tipo].cols}`;
+    hint.style.display='block';
+  }
+  if(zone) zone.style.display='block';
+  document.getElementById('import-preview').innerHTML='';
+  document.getElementById('import-save-btn').style.display='none';
+  const inp = document.getElementById('import-file-input');
+  if(inp) inp.value='';
+}
+
+function onImportFileSelected(files) {
+  if(!files.length||!_importTipo) return;
+  const prev = document.getElementById('import-preview');
+  prev.innerHTML='<div style="color:var(--dim);font-size:13px;padding:4px">Procesando '+files[0].name+'...</div>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      if(typeof XLSX==='undefined'){ prev.innerHTML='<div style="color:var(--danger);font-size:13px">SheetJS no disponible.</div>'; return; }
+      const wb = XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,raw:false,cellFormula:false});
+      // Try to find the right sheet (first non-empty)
+      let ws = null, sheetName = '';
+      for(const name of wb.SheetNames){
+        const s = wb.Sheets[name];
+        const ref = s['!ref'];
+        if(ref && ref !== 'A1'){ ws=s; sheetName=name; break; }
+      }
+      if(!ws){ prev.innerHTML='<div style="color:var(--danger);font-size:13px">No se encontró datos en el archivo.</div>'; return; }
+
+      // Auto-detect header row: scan first 5 rows for the one with most non-empty cells
+      const allRows = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:null});
+      let headerRowIdx = 0;
+      let maxCells = 0;
+      for(let i=0; i<Math.min(5, allRows.length); i++) {
+        const filled = (allRows[i]||[]).filter(v=>v!==null&&String(v).trim()!='').length;
+        if(filled > maxCells){ maxCells = filled; headerRowIdx = i; }
+      }
+      // Build rows using detected header row
+      const headerRow = allRows[headerRowIdx];
+      const rows = [];
+      for(let i=headerRowIdx+1; i<allRows.length; i++){
+        const obj = {};
+        headerRow.forEach((h,j)=>{ if(h) obj[String(h).trim()] = allRows[i][j]??null; });
+        rows.push(obj);
+      }
+      _importParsed = [];
+      const errors = [];
+      const mapper = IMPORT_HINTS[_importTipo].map;
+
+      rows.forEach((row, i) => {
+        // Skip totally empty rows
+        const vals = Object.values(row).filter(v=>v!==null&&String(v).trim()!='');
+        if(vals.length < 2) return;
+        try {
+          const mapped = mapper(row);
+          if(mapped) _importParsed.push(mapped);
+        } catch(err){ errors.push(`Fila ${i+2}: ${err.message}`); }
+      });
+
+      // Preview
+      const tipo = IMPORT_HINTS[_importTipo];
+      const egr  = _importParsed.filter(x=>x.monto>0);
+      let html = `<div class="stat-grid" style="margin-bottom:10px">
+        <div class="stat-box"><div class="stat-label" style="color:var(--accent)">Registros</div>
+          <div class="stat-val">${_importParsed.length}</div><div class="stat-sub">de ${rows.length} filas</div></div>
+        <div class="stat-box"><div class="stat-label" style="color:var(--success)">Monto total</div>
+          <div class="stat-val" style="font-size:14px;color:var(--success)">${fmt(_importParsed.reduce((s,x)=>s+(x.monto||x.saldo_actual||0),0))}</div></div>
+      </div>`;
+      if(errors.length) html += `<div style="background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.2);border-radius:10px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--danger)">⚠️ ${errors.length} filas omitidas</div>`;
+
+      // Show first 5 rows as preview
+      if(_importParsed.length) {
+        html += `<div class="card" style="padding:0;max-height:220px;overflow-y:auto;margin-bottom:8px">`;
+        _importParsed.slice(0,20).forEach(x => {
+          const label = x.proveedor||x.cliente||x.acreedor||'—';
+          const obra  = x.obra_nombre||x.negocio||'';
+          const monto = x.monto||x.saldo_actual||0;
+          const est   = x.estatus||x.tipo||'';
+          html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600">${label}</div>
+              <div class="item-sub">${x.razon||obra||est||''}${x.periodo?' · '+x.periodo:''}</div>
+            </div>
+            <div style="font-weight:700;font-size:13px;color:var(--accent);flex-shrink:0">${fmt(monto)}</div>
+          </div>`;
+        });
+        if(_importParsed.length>20) html+=`<div style="padding:8px 12px;color:var(--dim);font-size:12px">...y ${_importParsed.length-20} más</div>`;
+        html += '</div>';
+        document.getElementById('import-save-btn').style.display='block';
+      } else {
+        html += `<div style="color:var(--warn);font-size:13px;padding:8px">No se encontraron filas válidas. Verifica que el archivo tenga encabezados en la primera fila.</div>`;
+      }
+      prev.innerHTML = html;
+    } catch(err) {
+      prev.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:8px">Error: ${err.message}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(files[0]);
+}
+
+async function executeImport() {
+  if(!_importParsed.length||!_importTipo) return;
+  const btn = document.getElementById('import-save-btn');
+  btn.textContent='Importando...'; btn.disabled=true;
+
+  const tablaMap = { cxp:'cuentas_por_pagar', cxc:'cuentas_por_cobrar', deuda:'deuda_financiera' };
+  const tabla = tablaMap[_importTipo];
+
+  let saved=0, errors=0;
+  // Insert in batches of 10
+  const batchSize = 10;
+  for(let i=0; i<_importParsed.length; i+=batchSize) {
+    const batch = _importParsed.slice(i, i+batchSize).map(m => ({
+      ...m,
+      created_by: currentUser.nombre
+    }));
+    try {
+      // Single batch POST
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}`, {
+        method:'POST',
+        headers:{
+          'apikey':SUPABASE_KEY,
+          'Authorization':'Bearer '+SUPABASE_KEY,
+          'Content-Type':'application/json',
+          'Prefer':'return=minimal'
+        },
+        body: JSON.stringify(batch)
+      });
+      if(res.ok) saved += batch.length;
+      else {
+        let errMsg = res.statusText;
+        try{ const e=await res.json(); errMsg=e.message||e.hint||e.details||JSON.stringify(e); }catch(e2){}
+        console.error('Supabase batch error:', res.status, errMsg);
+        if(errors===0) showToast('Error Supabase: '+errMsg.slice(0,80), true); // Show first error
+        errors += batch.length;
+      }
+    } catch(e){ errors += batch.length; }
+    // Update button progress
+    btn.textContent = `Importando... ${Math.min(i+batchSize,_importParsed.length)}/${_importParsed.length}`;
+  }
+
+  showToast(`✅ ${saved} registros importados${errors?` · ${errors} errores`:''}`);
+  closeSheet('import-plan');
+  resetImportPlan();
+  await loadAll();
+  renderPlaneacion();
+  btn.textContent='⬆️ Importar a Supabase'; btn.disabled=false;
+}
 
 // ── PWA ───────────────────────────────────────────────
 if('serviceWorker' in navigator){
