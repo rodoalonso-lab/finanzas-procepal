@@ -485,7 +485,10 @@ body.tema-claro .theme-icon-sol   { color: var(--accent); }
     <div class="l-label">Correo electrónico</div>
     <input class="l-input" id="l-email" type="email" placeholder="tu@procepal.com" autocomplete="email">
     <div class="l-label">Contraseña</div>
-    <input class="l-input" id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <div style="position:relative">
+      <input class="l-input" id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" style="padding-right:44px">
+      <button type="button" onclick="toggleLoginPass()" id="l-pass-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:17px;color:var(--dim);padding:4px;line-height:1" title="Mostrar contraseña">👁️</button>
+    </div>
     <button class="l-btn" onclick="doLogin()">Iniciar sesión</button>
     <div class="l-err" id="l-err"></div>
   </div>
@@ -1061,6 +1064,18 @@ const CATS_EGRESO = ['Materiales','Mano de obra','Subcontrato','Equipo y herrami
 const CATS_INGRESO = ['Anticipo','Estimación','Liquidación','Finiquito','Devolución FG','Otro'];
 
 // ── LOGIN ─────────────────────────────────────────────
+function toggleLoginPass() {
+  var inp = document.getElementById('l-pass');
+  var eye = document.getElementById('l-pass-eye');
+  if(inp.type === 'password') {
+    inp.type = 'text';
+    eye.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    eye.textContent = '👁️';
+  }
+}
+
 async function doLogin() {
   const email = document.getElementById('l-email').value.trim().toLowerCase();
   const pass  = document.getElementById('l-pass').value;
@@ -2469,6 +2484,8 @@ function renderPlaneacion() {
   const el = document.getElementById('main-content');
   if(!el) return;
 
+  var esCapturista = currentUser && currentUser.rol==='capturista';
+
   const totalCXP   = cxpData.filter(function(x){return x.estatus!=='PAGADO';}).reduce(function(s,x){return s+(x.monto||0);},0);
   const totalCXC   = cxcData.reduce(function(s,x){return s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)));},0);
   const totalDeuda = deudaData.reduce(function(s,x){return s+(x.saldo_actual||0);},0);
@@ -2476,19 +2493,26 @@ function renderPlaneacion() {
 
   let html = '';
 
-  // KPIs
+  // KPIs — capturista solo ve "Por Pagar"
   html += '<div class="stat-grid" style="margin-bottom:14px">';
   html += '<div class="stat-box" style="border-color:rgba(255,77,106,.3)"><div class="stat-label" style="color:var(--danger)">Por Pagar</div><div class="stat-val" style="color:var(--danger);font-size:17px">'+fmt(totalCXP)+'</div><div class="stat-sub">'+vencidas+' vencidas</div></div>';
-  html += '<div class="stat-box" style="border-color:rgba(0,209,140,.3)"><div class="stat-label" style="color:var(--success)">Por Cobrar</div><div class="stat-val" style="color:var(--success);font-size:17px">'+fmt(totalCXC)+'</div><div class="stat-sub">'+cxcData.length+' facturas</div></div>';
-  html += '<div class="stat-box" style="border-color:rgba(155,126,255,.3)"><div class="stat-label" style="color:var(--purple)">Deuda Total</div><div class="stat-val" style="color:var(--purple);font-size:17px">'+fmt(totalDeuda)+'</div><div class="stat-sub">'+deudaData.length+' créditos</div></div>';
-  var pos = totalCXC - totalCXP;
-  html += '<div class="stat-box" style="border-color:rgba(77,142,255,.3)"><div class="stat-label" style="color:var(--accent2)">Posición Neta</div><div class="stat-val" style="color:'+(pos>=0?'var(--success)':'var(--danger)')+';font-size:17px">'+fmt(pos)+'</div><div class="stat-sub">CxC - CxP</div></div>';
+  if(!esCapturista) {
+    html += '<div class="stat-box" style="border-color:rgba(0,209,140,.3)"><div class="stat-label" style="color:var(--success)">Por Cobrar</div><div class="stat-val" style="color:var(--success);font-size:17px">'+fmt(totalCXC)+'</div><div class="stat-sub">'+cxcData.length+' facturas</div></div>';
+    html += '<div class="stat-box" style="border-color:rgba(155,126,255,.3)"><div class="stat-label" style="color:var(--purple)">Deuda Total</div><div class="stat-val" style="color:var(--purple);font-size:17px">'+fmt(totalDeuda)+'</div><div class="stat-sub">'+deudaData.length+' créditos</div></div>';
+    var pos = totalCXC - totalCXP;
+    html += '<div class="stat-box" style="border-color:rgba(77,142,255,.3)"><div class="stat-label" style="color:var(--accent2)">Posición Neta</div><div class="stat-val" style="color:'+(pos>=0?'var(--success)':'var(--danger)')+';font-size:17px">'+fmt(pos)+'</div><div class="stat-sub">CxC - CxP</div></div>';
+  }
   html += '</div>';
 
   // Sub-tabs + botón importar
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
   html += '<div class="plan-tabs" style="border:none;margin-bottom:0;flex:1">';
-  var tabs = [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcData.length+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección']];
+  // Capturista: solo ve sub-tab CxP
+  var tabs = esCapturista
+    ? [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')']]
+    : [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcData.length+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección']];
+  // Forzar sub-tab CxP si capturista intenta navegar a otro
+  if(esCapturista && _planTab !== 'cxp') _planTab = 'cxp';
   tabs.forEach(function(t) {
     html += '<button class="plan-tab'+(_planTab===t[0]?' active':'')+'" onclick="setPlanTab(\''+t[0]+'\')">'+t[1]+'</button>';
   });
@@ -2537,13 +2561,16 @@ function renderCXPList() {
 
   var ss = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;cursor:pointer';
   var html = '';
+  var _esCapturista = currentUser && currentUser.rol==='capturista';
 
-  // KPIs
-  html += '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">';
-  html += '<div><div class="stat-label" style="color:var(--danger)">Por Pagar</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--danger)">'+fmt(totalPend)+'</div></div>';
-  html += '<div><div class="stat-label" style="color:var(--warn)">Vencido</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--warn)">'+fmt(totalVenc)+'</div></div>';
-  html += '<div><div class="stat-label" style="color:var(--success)">Pagado</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--success)">'+fmt(totalPag)+'</div></div>';
-  html += '</div>';
+  // KPIs — capturista solo ve total pendiente, sin montos de vencido ni pagado
+  if(!_esCapturista) {
+    html += '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+    html += '<div><div class="stat-label" style="color:var(--danger)">Por Pagar</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--danger)">'+fmt(totalPend)+'</div></div>';
+    html += '<div><div class="stat-label" style="color:var(--warn)">Vencido</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--warn)">'+fmt(totalVenc)+'</div></div>';
+    html += '<div><div class="stat-label" style="color:var(--success)">Pagado</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--success)">'+fmt(totalPag)+'</div></div>';
+    html += '</div>';
+  }
 
   // Buscador
   html += '<input type="text" placeholder="Buscar proveedor, concepto..." value="'+(window._cxpBusq||'')+'" oninput="window._cxpBusq=this.value;renderPlaneacion()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;margin-bottom:8px">';
@@ -3692,25 +3719,40 @@ function aplicarRBAC() {
     el.style.display = esCapturista ? 'none' : '';
   });
 
-  // ── Bloqueo de pestañas para capturista ───────────────────────────
-  // Un capturista no necesita ni debe ver: Resumen, Reportes ni Conciliación
-  var tabsRestringidas = ['tab-dashboard','tab-reportes','tab-conciliacion'];
-  tabsRestringidas.forEach(function(tabId){
-    var el = document.getElementById(tabId);
-    if(el) el.style.display = esCapturista ? 'none' : '';
-  });
+  if(esCapturista) {
+    // ── Capturista: solo ve Planeación (módulo CxP) ───────────────────
+    // Ocultar TODAS las pestañas excepto Planeación
+    var todasLasTabs = ['tab-dashboard','tab-egresos','tab-ingresos',
+                        'tab-cfdi','tab-conciliacion','tab-cuentas','tab-reportes'];
+    todasLasTabs.forEach(function(tabId){
+      var el = document.getElementById(tabId);
+      if(el) el.style.display = 'none';
+    });
 
-  // ── FAB: capturista solo puede registrar en Egresos e Ingresos ────
-  var fab = document.getElementById('fab-btn');
-  if(fab) {
-    if(esCapturista){
-      fab.style.display = ['egresos','ingresos'].includes(currentTab) ? 'flex' : 'none';
+    // Mantener visible solo Planeación
+    var tabPlan = document.getElementById('tab-planeacion');
+    if(tabPlan) tabPlan.style.display = '';
+
+    // Ocultar FAB (no puede crear movimientos)
+    var fab = document.getElementById('fab-btn');
+    if(fab) fab.style.display = 'none';
+
+    // Redirigir siempre a Planeación y abrir sub-tab CxP
+    if(currentTab !== 'planeacion') {
+      setTab('planeacion');
     }
-  }
+    // Asegurar que se abre en CxP al entrar
+    _planTab = 'cxp';
 
-  // ── Pestaña inicial para capturista: Egresos (no el Dashboard) ────
-  if(esCapturista && currentTab==='dashboard'){
-    setTab('egresos');
+  } else {
+    // ── Director / Admin: mostrar todas las pestañas ──────────────────
+    ['tab-dashboard','tab-egresos','tab-ingresos','tab-cfdi',
+     'tab-conciliacion','tab-cuentas','tab-reportes','tab-planeacion'].forEach(function(tabId){
+      var el = document.getElementById(tabId);
+      if(el) el.style.display = '';
+    });
+    var fab = document.getElementById('fab-btn');
+    if(fab) fab.style.display = '';
   }
 }
 

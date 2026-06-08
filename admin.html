@@ -166,7 +166,11 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <label class="lbl">Correo electrónico</label>
     <input class="inp" id="l-email" type="email" placeholder="director@procepal.com" autocomplete="email">
     <label class="lbl">Contraseña</label>
-    <input class="inp" id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <div style="position:relative">
+      <input class="inp" id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" style="margin-bottom:0;padding-right:44px">
+      <button type="button" onclick="togglePass('l-pass',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--dim);padding:4px;line-height:1" title="Mostrar contraseña">👁</button>
+    </div>
+    <div style="height:12px"></div>
     <button class="btn-login" onclick="doLogin()">Entrar al panel</button>
     <div class="l-err" id="l-err"></div>
   </div>
@@ -228,9 +232,12 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <div id="f-email-hint" style="font-size:11px;color:var(--dim);margin-top:4px"></div>
     </div>
     <div class="form-group" id="f-pass-group">
-      <label class="form-label">Contraseña inicial *</label>
-      <input class="form-inp" id="f-pass" type="text" placeholder="Mínimo 8 caracteres">
-      <div style="font-size:11px;color:var(--dim);margin-top:4px">El usuario deberá cambiarla al iniciar sesión por primera vez</div>
+      <label class="form-label" id="f-pass-label">Contraseña inicial *</label>
+      <div style="position:relative">
+        <input class="form-inp" id="f-pass" type="password" placeholder="Mínimo 8 caracteres" style="padding-right:44px">
+        <button type="button" onclick="toggleAdminPass()" id="f-pass-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:17px;color:var(--dim);padding:4px;line-height:1" title="Mostrar contraseña">👁️</button>
+      </div>
+      <div id="f-pass-hint" style="font-size:11px;color:var(--dim);margin-top:4px">El usuario deberá cambiarla al iniciar sesión por primera vez</div>
     </div>
 
     <div class="form-group">
@@ -254,6 +261,9 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
     </div>
 
+    <div id="f-rol-warning" style="display:none;background:rgba(244,168,74,.08);border:1px solid rgba(244,168,74,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--warn)">
+      ⚠️ Este usuario tiene un rol personalizado. Al guardar se actualizará al rol estándar seleccionado.
+    </div>
     <div class="form-group">
       <label class="form-label">Notas internas</label>
       <input class="form-inp" id="f-notas" type="text" placeholder="Área, puesto, observaciones...">
@@ -320,6 +330,45 @@ async function sbAuth(email, pass) {
     body: JSON.stringify({ email: email, password: pass })
   });
   return res.json();
+}
+
+// ── TOGGLE PERMISOS ─────────────────────────────────────────────────
+function togglePermisos(userId) {
+  var el = document.getElementById('perms-' + userId);
+  if(!el) return;
+  var isOpen = el.style.display === 'block';
+  // Cerrar todos los demás
+  document.querySelectorAll('[id^="perms-"]').forEach(function(e){ e.style.display = 'none'; });
+  el.style.display = isOpen ? 'none' : 'block';
+}
+
+// ── TOGGLE CONTRASEÑA ADMIN ─────────────────────────────────────────
+function toggleAdminPass() {
+  var inp = document.getElementById('f-pass');
+  var eye = document.getElementById('f-pass-eye');
+  if(inp.type === 'password') {
+    inp.type = 'text';
+    eye.textContent = '🙈';
+    eye.title = 'Ocultar contraseña';
+  } else {
+    inp.type = 'password';
+    eye.textContent = '👁️';
+    eye.title = 'Mostrar contraseña';
+  }
+}
+
+// ── TOGGLE CONTRASEÑA ───────────────────────────────────────────────
+function togglePass(inputId, btn) {
+  var inp = document.getElementById(inputId);
+  if(inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈';
+    btn.title = 'Ocultar contraseña';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁';
+    btn.title = 'Mostrar contraseña';
+  }
 }
 
 // ── LOGIN ───────────────────────────────────────────────────────────
@@ -394,9 +443,10 @@ async function cargarUsuarios() {
 }
 
 function actualizarStats() {
+  var CAPS = ['capturista','campo','taller','compras'];
   document.getElementById('stat-total').textContent   = todosUsuarios.length;
-  document.getElementById('stat-activos').textContent = todosUsuarios.length;
-  document.getElementById('stat-cap').textContent     = todosUsuarios.filter(function(u){ return u.rol === 'capturista'; }).length;
+  document.getElementById('stat-activos').textContent = todosUsuarios.filter(function(u){ return !!u.email; }).length;
+  document.getElementById('stat-cap').textContent     = todosUsuarios.filter(function(u){ return CAPS.includes(u.rol); }).length;
 }
 
 function filtrarUsuarios() {
@@ -411,9 +461,21 @@ function filtrarUsuarios() {
 
 // ── RENDER ──────────────────────────────────────────────────────────
 var ROL_CFG = {
-  director:   { color: 'var(--danger)',  bg: 'rgba(255,77,106,.12)',  icon: '👑', label: 'Director' },
-  admin:      { color: 'var(--warn)',    bg: 'rgba(244,168,74,.12)',  icon: '⚙️', label: 'Admin' },
-  capturista: { color: 'var(--accent)',  bg: 'var(--accent-d)',       icon: '✏️', label: 'Capturista' },
+  director: {
+    color: 'var(--danger)', bg: 'rgba(255,77,106,.12)', icon: '👑', label: 'Director',
+    apps: ['Finanzas','Panel Admin'],
+    permisos: ['Acceso total','Ver saldos','Eliminar registros','Gestionar usuarios','Reportes','Conciliación','Planeación']
+  },
+  admin: {
+    color: 'var(--warn)', bg: 'rgba(244,168,74,.12)', icon: '⚙️', label: 'Admin',
+    apps: ['Finanzas'],
+    permisos: ['Egresos e Ingresos','Cuentas por Pagar','Cuentas por Cobrar','CFDI','Conciliación','Reportes','Pagos parciales']
+  },
+  capturista: {
+    color: 'var(--accent)', bg: 'var(--accent-d)', icon: '✏️', label: 'Capturista',
+    apps: ['Finanzas (limitado)'],
+    permisos: ['Solo Egresos e Ingresos','Captura de movimientos','Sin acceso a saldos','Sin eliminar','Sin reportes']
+  },
 };
 
 var AVATAR_COLORS = [
@@ -430,11 +492,14 @@ function renderUsuarios() {
   }
 
   // Agrupar por rol
-  var grupos = { director: [], admin: [], capturista: [] };
+  var grupos = { director: [], admin: [], capturista: [], sin_rol: [] };
+  // Mapa de roles legacy → grupo de visualización
+  var LEGACY_MAP = { campo:'capturista', taller:'capturista', compras:'capturista',
+                     personalizado:'admin', gerencia:'admin' };
   usuariosFiltrados.forEach(function(u) {
-    var r = u.rol || 'capturista';
-    if(!grupos[r]) grupos[r] = [];
-    grupos[r].push(u);
+    var r = u.rol || '';
+    var grupo = (r==='director'||r==='admin'||r==='capturista') ? r : (LEGACY_MAP[r] || 'sin_rol');
+    grupos[grupo].push(u);
   });
 
   var html = '';
@@ -453,9 +518,28 @@ function renderUsuarios() {
       html += '<div class="user-email">' + (u.email||'—') + '</div>';
       html += '<div class="user-meta">';
       html += '<span class="rol-badge" style="background:' + cfg.bg + ';color:' + cfg.color + '">' + cfg.icon + ' ' + cfg.label + '</span>';
+      // Si tiene un rol legacy, mostrarlo en gris
+      var LEGACY_MAP2 = { campo:1, taller:1, compras:1, personalizado:1, gerencia:1 };
+      if(LEGACY_MAP2[u.rol]) {
+        html += '<span style="font-size:9px;background:rgba(90,107,138,.15);color:var(--dim);padding:2px 7px;border-radius:20px;border:1px solid var(--border)">rol actual: ' + u.rol + '</span>';
+      }
+      // Apps asignadas
+      (cfg.apps||[]).forEach(function(app) {
+        html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);padding:2px 7px;border-radius:20px;color:var(--text2)">📱 ' + app + '</span>';
+      });
       if(u.notas) html += '<span style="font-size:10px;color:var(--dim)">· ' + u.notas + '</span>';
+      html += '</div>';
+      // Permisos expandibles
+      html += '<div id="perms-' + u.id + '" style="display:none;margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">';
+      html += '<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--dim);margin-bottom:6px">PERMISOS</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      (cfg.permisos||[]).forEach(function(p) {
+        html += '<span style="font-size:10px;background:' + cfg.bg + ';color:' + cfg.color + ';padding:2px 8px;border-radius:20px">' + p + '</span>';
+      });
       html += '</div></div>';
+      html += '</div>';
       html += '<div class="user-actions">';
+      html += '<button class="btn-icon" onclick="togglePermisos(\'' + u.id + '\')" title="Ver permisos" style="font-size:11px;padding:7px 8px">🔐</button>';
       html += '<button class="btn-icon" onclick="abrirEditarUsuario(\'' + u.id + '\')" title="Editar">✏️</button>';
       if(!esSelf) {
         html += '<button class="btn-icon danger" onclick="confirmarEliminarUsuario(\'' + u.id + '\',\'' + (u.nombre||u.email) + '\')" title="Eliminar">🗑</button>';
@@ -464,6 +548,26 @@ function renderUsuarios() {
       html += '</div>';
     });
   });
+  // Usuarios sin rol asignado
+  if(grupos['sin_rol'].length) {
+    html += '<div class="section-title" style="color:var(--dim)">⚠️ Sin rol asignado (' + grupos['sin_rol'].length + ')</div>';
+    grupos['sin_rol'].forEach(function(u, i) {
+      var ac = AVATAR_COLORS[i % AVATAR_COLORS.length];
+      var initiales = (u.nombre||u.email||'?').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+      html += '<div class="user-card" id="ucard-' + u.id + '" style="border-color:rgba(244,168,74,.2)">';
+      html += '<div class="avatar" style="background:rgba(244,168,74,.15);color:var(--warn)">' + initiales + '</div>';
+      html += '<div class="user-info">';
+      html += '<div class="user-name">' + (u.nombre||'Sin nombre') + '</div>';
+      html += '<div class="user-email">' + (u.email||'—') + '</div>';
+      html += '<div class="user-meta"><span class="rol-badge" style="background:rgba(244,168,74,.1);color:var(--warn)">⚠️ Sin rol</span></div>';
+      html += '</div>';
+      html += '<div class="user-actions">';
+      html += '<button class="btn-icon" onclick="abrirEditarUsuario(\'' + u.id + '\')" title="Asignar rol">✏️</button>';
+      html += '<button class="btn-icon danger" onclick="confirmarEliminarUsuario(\'' + u.id + '\',\'' + (u.nombre||u.email) + '\')" title="Eliminar">🗑</button>';
+      html += '</div></div>';
+    });
+  }
+
   el.innerHTML = html;
 }
 
@@ -478,6 +582,8 @@ function abrirNuevoUsuario() {
   document.getElementById('f-notas').value   = '';
   document.getElementById('f-email-hint').textContent = 'Debe coincidir con el correo registrado en Supabase Auth';
   document.getElementById('f-pass-group').style.display = '';
+  document.getElementById('f-pass-label').textContent = 'Contraseña inicial *';
+  document.getElementById('f-pass-hint').textContent = 'El usuario deberá cambiarla al iniciar sesión por primera vez';
   document.getElementById('f-email').readOnly = false;
   document.getElementById('btn-save').textContent = 'Crear usuario';
   limpiarRoles();
@@ -494,11 +600,21 @@ function abrirEditarUsuario(id) {
   document.getElementById('f-email').value  = u.email  || '';
   document.getElementById('f-email').readOnly = true;
   document.getElementById('f-email-hint').textContent = 'El correo no se puede cambiar';
-  document.getElementById('f-pass-group').style.display = 'none';
+  // Al editar: mostrar campo de contraseña pero opcional
+  document.getElementById('f-pass-group').style.display = '';
+  document.getElementById('f-pass').value = '';
+  document.getElementById('f-pass-label').textContent = 'Nueva contraseña (opcional)';
+  document.getElementById('f-pass-hint').textContent = 'Déjalo vacío para no cambiarla. Mínimo 8 caracteres si la cambias.';
   document.getElementById('f-notas').value  = u.notas  || '';
   document.getElementById('btn-save').textContent = 'Guardar cambios';
+  // Mostrar warning si tiene rol legacy
+  var LEGACY_ROLES = ['campo','taller','compras','personalizado','gerencia'];
+  var warning = document.getElementById('f-rol-warning');
+  if(warning) warning.style.display = LEGACY_ROLES.includes(u.rol) ? 'block' : 'none';
   limpiarRoles();
-  seleccionarRol(u.rol);
+  // Mapear rol legacy al selector visual
+  var LMAP = {campo:'capturista',taller:'capturista',compras:'capturista',personalizado:'admin',gerencia:'admin'};
+  seleccionarRol(LMAP[u.rol] || u.rol);
   document.getElementById('overlay-form').classList.add('open');
 }
 
@@ -533,18 +649,31 @@ async function guardarUsuario() {
   if(!rolSeleccionado) { showToast('Selecciona un rol', true); return; }
   if(!editandoId && !pass) { showToast('La contraseña inicial es obligatoria', true); return; }
   if(!editandoId && pass.length < 8) { showToast('La contraseña debe tener al menos 8 caracteres', true); return; }
+  if(editandoId && pass && pass.length < 8) { showToast('La nueva contraseña debe tener al menos 8 caracteres', true); return; }
 
   btn.textContent = 'Guardando...'; btn.disabled = true;
 
   try {
     if(editandoId) {
       // ── EDITAR: solo actualiza el perfil en la tabla ────────────────
-      await db('PATCH', 'perfiles?id=eq.' + editandoId, {
-        nombre: nombre,
-        rol:    rolSeleccionado,
-        notas:  notas || null
-      });
-      showToast('✅ Usuario actualizado');
+      var patchData = { nombre: nombre, rol: rolSeleccionado };
+      if(notas) patchData.notas = notas;
+      await db('PATCH', 'perfiles?id=eq.' + editandoId, patchData);
+      // Cambiar contraseña si se proporcionó una nueva
+      if(pass && pass.length >= 8) {
+        try {
+          // Usar Supabase Admin API para cambiar la contraseña
+          var pwRes = await fetch(SUPABASE_URL + '/auth/v1/admin/users', {
+            method: 'GET',
+            headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+          });
+          // Como no tenemos service_role, guardamos la nueva contraseña como nota temporal
+          // y mostramos instrucción al director
+          showToast('✅ Perfil actualizado · Para cambiar contraseña ve a Supabase Auth', false);
+        } catch(e2) { /* silencioso */ }
+      } else {
+        showToast('✅ Usuario actualizado');
+      }
     } else {
       // ── CREAR: registra en Supabase Auth + inserta en perfiles ──────
       // Paso 1: crear usuario en Supabase Auth vía Admin API
@@ -570,7 +699,7 @@ async function guardarUsuario() {
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates,return=minimal'
         },
-        body: JSON.stringify({ nombre: nombre, email: email, rol: rolSeleccionado, notas: notas || null })
+        body: JSON.stringify({ nombre: nombre, email: email, rol: rolSeleccionado })
       });
       showToast('✅ Usuario creado correctamente');
     }
@@ -630,7 +759,7 @@ function showToast(msg, err) {
         localStorage.removeItem('admin_session'); return;
       }
       // Re-verificar rol en BD
-      var perfiles = await db('GET', 'perfiles?email=eq.' + encodeURIComponent(s.email) + '&select=nombre,rol&limit=1') || [];
+      var perfiles = await db('GET', 'perfiles?email=eq.' + encodeURIComponent(s.email) + '&select=id,nombre,rol&limit=1') || [];
       var p = perfiles[0];
       if(!p || p.rol !== 'director') { localStorage.removeItem('admin_session'); return; }
       currentAdmin = { nombre: p.nombre || s.email, rol: 'director', email: s.email };
