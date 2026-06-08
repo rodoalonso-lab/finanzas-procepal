@@ -969,6 +969,54 @@ body.tema-claro .theme-icon-sol   { color: var(--accent); }
   </div>
 </div>
 
+
+<!-- SHEET: Pago parcial CxP -->
+<div class="sheet-overlay" id="sheet-pago-cxp">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title">Registrar Pago</div>
+        <button class="sheet-close" onclick="closeSheet('pago-cxp')">✕</button>
+      </div>
+    </div>
+    <!-- Info de la CxP -->
+    <div id="pago-cxp-info" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px"></div>
+    <!-- Campos -->
+    <div class="form-group">
+      <div class="form-label">Monto del pago *</div>
+      <input class="form-input" id="pcxp-monto" type="number" placeholder="0.00" step="0.01" oninput="calcPagoCXP()">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Saldo pendiente tras el pago</div>
+      <input class="form-input" id="pcxp-nuevo-saldo" type="number" readonly style="opacity:.7;color:var(--accent)">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Fecha del pago *</div>
+      <input class="form-input" id="pcxp-fecha" type="date">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Forma de pago</div>
+      <select class="form-input" id="pcxp-forma">
+        <option value="transferencia">🏦 Transferencia / SPEI</option>
+        <option value="efectivo">💵 Efectivo</option>
+        <option value="cheque">📄 Cheque</option>
+        <option value="tarjeta">💳 Tarjeta</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Referencia / Folio</div>
+      <input class="form-input" id="pcxp-ref" type="text" placeholder="Núm. de transferencia o referencia">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Notas</div>
+      <input class="form-input" id="pcxp-notas" type="text" placeholder="Observaciones del pago">
+    </div>
+    <button class="btn btn-accent" id="pcxp-save-btn" onclick="guardarPagoCXP()">✅ Registrar pago</button>
+    <button class="btn btn-ghost" onclick="closeSheet('pago-cxp')">Cancelar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -2573,6 +2621,9 @@ function renderCXPList() {
       if(x.razon) html += '<span style="font-size:10px;color:var(--dim)">'+x.razon+'</span>';
       if(x.obra_nombre) html += '<span style="font-size:10px;color:var(--accent2)">🏗 '+x.obra_nombre+'</span>';
       html += '</div>';
+      var pagadoParcial = x.pagado_parcial||0;
+      var saldoCXP = pagadoParcial>0 ? Math.max(0,(x.monto||0)-pagadoParcial) : (x.monto||0);
+      var pctCXP   = x.monto>0 ? Math.round(pagadoParcial/x.monto*100) : 0;
       html += '<div style="display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap">';
       if(x.periodo)   html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);padding:1px 6px;border-radius:20px">'+x.periodo+'</span>';
       if(x.prioridad) html += '<span style="font-size:10px;color:'+prioColor(x.prioridad)+';font-weight:700">'+x.prioridad+'</span>';
@@ -2581,7 +2632,14 @@ function renderCXPList() {
       html += '</div>';
       html += '</div>';
       html += '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">';
-      html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:var(--danger)">'+fmt(x.monto||0)+'</span>';
+      html += '<div style="text-align:right">';
+      if(pagadoParcial>0 && x.estatus!=='PAGADO') {
+        html += '<div style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:var(--warn)">'+fmt(saldoCXP)+'</div>';
+        html += '<div style="font-size:9px;color:var(--dim)">de '+fmt(x.monto||0)+' ('+pctCXP+'% pag.)</div>';
+      } else {
+        html += '<div style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:'+(x.estatus==='PAGADO'?'var(--success)':'var(--danger)')+'">'+fmt(x.monto||0)+'</div>';
+      }
+      html += '</div>';
       html += '<span id="'+expId+'-arrow" style="color:var(--dim);font-size:12px;transition:transform .2s">▼</span>';
       html += '</div>';
       html += '</div>';
@@ -2595,9 +2653,21 @@ function renderCXPList() {
       if(x.beneficiario)      html += '<div><div class="stat-label">Beneficiario</div><div style="font-size:12px">'+x.beneficiario+'</div></div>';
       if(x.observaciones)     html += '<div style="grid-column:1/-1"><div class="stat-label">Observaciones</div><div style="font-size:12px;color:var(--text2)">'+x.observaciones+'</div></div>';
       html += '</div>';
+      if(pagadoParcial>0) {
+        html += '<div style="margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">';
+        html += '<div class="stat-label" style="color:var(--accent);margin-bottom:4px">Pagos registrados</div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+        html += '<div style="font-size:12px">Pagado: <span style="color:var(--success);font-weight:700">'+fmt(pagadoParcial)+'</span></div>';
+        html += '<div style="font-size:12px">Saldo: <span style="color:var(--warn);font-weight:700">'+fmt(saldoCXP)+'</span></div>';
+        html += '</div>';
+        html += '<div style="background:var(--surface);border-radius:4px;height:4px;margin-top:6px">';
+        html += '<div style="background:var(--success);height:4px;border-radius:4px;width:'+pctCXP+'%;transition:width .4s"></div>';
+        html += '</div></div>';
+      }
       if(isAdmin) {
-        html += '<div style="display:flex;gap:8px;margin-top:6px">';
-        html += '<button onclick="marcarPagadoCXP(\''+x.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--success);background:rgba(0,209,140,.08);color:var(--success);font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">✓ Marcar pagado</button>';
+        html += '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">';
+        html += '<button onclick="abrirPagoParcialCXP(\''+x.id+'\')" style="flex:2;padding:8px;border-radius:8px;border:1px solid var(--accent)44;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">💰 Pago parcial</button>';
+        html += '<button onclick="marcarPagadoCXP(\''+x.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--success)44;background:rgba(0,209,140,.08);color:var(--success);font-size:11px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">✓ Total</button>';
         html += '<button onclick="deleteCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑</button>';
         html += '</div>';
       }
@@ -3758,6 +3828,125 @@ function aplicarTemaGuardado() {
 
 // Aplicar tema antes de que cargue la pantalla para evitar parpadeo
 aplicarTemaGuardado();
+
+
+// ── PAGO PARCIAL CxP ─────────────────────────────────────────────────
+
+var _pagoCXPId = null;
+
+function abrirPagoParcialCXP(cxpId) {
+  var x = cxpData.find(function(c){return c.id===cxpId;});
+  if(!x) return;
+  _pagoCXPId = cxpId;
+
+  var pagadoParcial = x.pagado_parcial||0;
+  var saldoActual   = Math.max(0,(x.monto||0)-pagadoParcial);
+
+  // Info de la CxP
+  var info = '';
+  info += '<div class="stat-label" style="color:var(--danger);margin-bottom:6px">Cuenta por Pagar</div>';
+  info += '<div style="font-size:13px;font-weight:700;margin-bottom:8px">'+(x.proveedor||'—')+'</div>';
+  info += '<div style="display:flex;gap:16px;flex-wrap:wrap">';
+  info += '<div><div class="stat-label">Monto total</div><div style="font-size:13px;font-weight:700">'+fmt(x.monto||0)+'</div></div>';
+  info += '<div><div class="stat-label" style="color:var(--success)">Ya pagado</div><div style="font-size:13px;font-weight:700;color:var(--success)">'+fmt(pagadoParcial)+'</div></div>';
+  info += '<div><div class="stat-label" style="color:var(--warn)">Saldo pendiente</div><div style="font-size:13px;font-weight:700;color:var(--warn)">'+fmt(saldoActual)+'</div></div>';
+  info += '</div>';
+  if(pagadoParcial>0) {
+    var pct = x.monto>0 ? Math.round(pagadoParcial/x.monto*100) : 0;
+    info += '<div style="background:var(--bg);border-radius:4px;height:5px;margin-top:10px">';
+    info += '<div style="background:var(--success);height:5px;border-radius:4px;width:'+pct+'%"></div></div>';
+    info += '<div style="font-size:10px;color:var(--dim);margin-top:4px">'+pct+'% liquidado</div>';
+  }
+  if(x.concepto)         info += '<div class="item-sub" style="margin-top:6px">'+x.concepto+'</div>';
+  if(x.factura)          info += '<div class="item-sub">Factura: '+x.factura+'</div>';
+  if(x.fecha_vencimiento)info += '<div class="item-sub">Vence: '+fmtDate(x.fecha_vencimiento)+'</div>';
+  document.getElementById('pago-cxp-info').innerHTML = info;
+
+  // Reset campos
+  document.getElementById('pcxp-monto').value       = '';
+  document.getElementById('pcxp-nuevo-saldo').value  = saldoActual.toFixed(2);
+  document.getElementById('pcxp-nuevo-saldo').style.color = 'var(--warn)';
+  document.getElementById('pcxp-fecha').value        = new Date().toISOString().slice(0,10);
+  document.getElementById('pcxp-ref').value          = '';
+  document.getElementById('pcxp-notas').value        = '';
+  document.getElementById('pcxp-forma').value        = 'transferencia';
+  document.getElementById('pcxp-save-btn').textContent = '✅ Registrar pago';
+  document.getElementById('pcxp-save-btn').disabled  = false;
+
+  openSheet('pago-cxp');
+}
+
+function calcPagoCXP() {
+  var x = cxpData.find(function(c){return c.id===_pagoCXPId;});
+  if(!x) return;
+  var pagadoParcial = x.pagado_parcial||0;
+  var saldoActual   = Math.max(0,(x.monto||0)-pagadoParcial);
+  var pago          = parseFloat(document.getElementById('pcxp-monto').value)||0;
+  var nuevoSaldo    = Math.max(0, Math.round((saldoActual-pago)*100)/100);
+  var el = document.getElementById('pcxp-nuevo-saldo');
+  el.value = nuevoSaldo.toFixed(2);
+  el.style.color = nuevoSaldo<=0 ? 'var(--success)' : 'var(--warn)';
+}
+
+async function guardarPagoCXP() {
+  var x = cxpData.find(function(c){return c.id===_pagoCXPId;});
+  if(!x) return;
+
+  var pago  = parseFloat(document.getElementById('pcxp-monto').value)||0;
+  var fecha = document.getElementById('pcxp-fecha').value;
+  if(!pago||pago<=0) { showToast('Ingresa un monto válido',true); return; }
+  if(!fecha)         { showToast('Selecciona la fecha del pago',true); return; }
+
+  var pagadoParcial = x.pagado_parcial||0;
+  var saldoActual   = Math.max(0,(x.monto||0)-pagadoParcial);
+  if(pago > saldoActual+0.01) {
+    showToast('El pago ('+fmt(pago)+') supera el saldo pendiente ('+fmt(saldoActual)+')',true);
+    return;
+  }
+
+  var btn = document.getElementById('pcxp-save-btn');
+  btn.textContent='Guardando...'; btn.disabled=true;
+
+  try {
+    var nuevoPagado = Math.round((pagadoParcial+pago)*100)/100;
+    var nuevoSaldo  = Math.max(0, Math.round((saldoActual-pago)*100)/100);
+    var nuevoEstatus = nuevoSaldo<=0.01 ? 'PAGADO' : x.estatus;
+
+    // 1. Actualizar CxP: pagado_parcial y estatus
+    await db('PATCH','cuentas_por_pagar?id=eq.'+_pagoCXPId, {
+      pagado_parcial: nuevoPagado,
+      estatus:        nuevoEstatus
+    });
+
+    // 2. Registrar como egreso en movimientos
+    await db('POST','movimientos',{
+      tipo:              'egreso',
+      categoria:         'Subcontrato',
+      descripcion:       'Pago CxP: '+(x.proveedor||'')+
+                         (x.factura?' FAC#'+x.factura:'')+
+                         (nuevoEstatus==='PAGADO'?' (LIQUIDADO)':' (PARCIAL '+fmt(nuevoSaldo)+' pend.)'),
+      monto:             pago,
+      fecha:             fecha,
+      forma_pago:        document.getElementById('pcxp-forma').value,
+      referencia:        document.getElementById('pcxp-ref').value.trim()||null,
+      obra_id:           x.obra_id||null,
+      proveedor_cliente: x.proveedor||null,
+      created_by:        currentUser.nombre
+    });
+
+    var msg = nuevoSaldo<=0.01
+      ? '✅ Pago completo — CxP liquidada'
+      : '✅ Pago de '+fmt(pago)+' registrado · Saldo: '+fmt(nuevoSaldo);
+    showToast(msg);
+    closeSheet('pago-cxp');
+    await loadAll();
+    renderPlaneacion();
+
+  } catch(e) {
+    showToast('Error: '+e.message, true);
+  }
+  btn.textContent='✅ Registrar pago'; btn.disabled=false;
+}
 
 // ── PWA ───────────────────────────────────────────────
 if('serviceWorker' in navigator){
