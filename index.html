@@ -510,6 +510,14 @@ body.tema-claro .theme-icon-sol   { color: var(--accent); }
 /* Tema claro */
 body.tema-claro .nav-group-dropdown { background: #fff; border-color: var(--border); }
 body.tema-claro .nav-sub-tab:hover  { background: var(--surface); }
+
+/* ── SUB-NAV ── */
+.sub-nav{display:flex;gap:0;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.sub-nav::-webkit-scrollbar{display:none}
+.sub-tab{flex-shrink:0;padding:9px 14px;font-size:12px;font-weight:600;color:var(--dim);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;transition:color .15s,border-color .15s;margin-bottom:-1px}
+.sub-tab:hover{color:var(--text2)}
+.sub-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+body.tema-claro .sub-nav{background:#FFFFFF}
 </style>
 </head>
 <body>
@@ -549,31 +557,24 @@ body.tema-claro .nav-sub-tab:hover  { background: var(--surface); }
 </div>
 <button class="logout-btn" onclick="doLogout()">Salir</button>
   </div>
-  <div class="nav-tabs">
-    <!-- GRUPO: Control Presupuestal -->
-    <div class="nav-group" id="grupo-presupuestal" style="position:relative">
-      <div class="nav-group-label" id="tab-grupo-presupuestal" onclick="toggleGrupo(event)">
-        📊 Control Presupuestal <span id="arrow-pres">▼</span>
-      </div>
-      <div id="dd-presupuestal" style="display:none;position:absolute;top:100%;left:0;background:var(--card);border:1px solid var(--border);border-radius:12px;min-width:190px;box-shadow:0 16px 40px rgba(0,0,0,.6);z-index:9999;overflow:hidden">
-        <button class="nav-sub-tab" onclick="setTab('dashboard');cerrarTodos()" id="tab-dashboard">📈 Resumen</button>
-        <button class="nav-sub-tab" onclick="setTab('egresos');cerrarTodos()" id="tab-egresos">📤 Egresos</button>
-        <button class="nav-sub-tab" onclick="setTab('ingresos');cerrarTodos()" id="tab-ingresos">📥 Ingresos</button>
-      </div>
-    </div>
-    <!-- GRUPO: Fiscalización -->
-    <div class="nav-group" id="grupo-fiscalizacion" style="position:relative">
-      <div class="nav-group-label" id="tab-grupo-fiscalizacion" onclick="toggleGrupoFisc(event)">
-        🏛️ Fiscalización <span id="arrow-fisc">▼</span>
-      </div>
-      <div id="dd-fiscalizacion" style="display:none;position:absolute;top:100%;left:0;background:var(--card);border:1px solid var(--border);border-radius:12px;min-width:190px;box-shadow:0 16px 40px rgba(0,0,0,.6);z-index:9999;overflow:hidden">
-        <button class="nav-sub-tab" onclick="setTab('cfdi');cerrarTodos()" id="tab-cfdi">🧾 CFDI</button>
-        <button class="nav-sub-tab" onclick="setTab('conciliacion');cerrarTodos()" id="tab-conciliacion">🔗 Conciliación</button>
-        <button class="nav-sub-tab" onclick="setTab('cuentas');cerrarTodos()" id="tab-cuentas">🏦 Cuentas</button>
-        <button class="nav-sub-tab" onclick="setTab('reportes');cerrarTodos()" id="tab-reportes">📊 Reportes</button>
-      </div>
-    </div>
+  <!-- NAV PRINCIPAL -->
+  <div class="nav-tabs" id="nav-principal">
+    <button class="nav-tab" onclick="setGrupo('presupuestal')" id="tab-grupo-presupuestal">📊 Control Presupuestal</button>
+    <button class="nav-tab" onclick="setGrupo('fiscalizacion')" id="tab-grupo-fiscalizacion">🏛️ Fiscalización</button>
     <button class="nav-tab" onclick="setTab('planeacion')" id="tab-planeacion">📋 Planeación</button>
+  </div>
+  <!-- SUB-NAV: Control Presupuestal -->
+  <div class="sub-nav" id="subnav-presupuestal" style="display:none">
+    <button class="sub-tab" onclick="setTab('dashboard')" id="tab-dashboard">📈 Resumen</button>
+    <button class="sub-tab" onclick="setTab('egresos')" id="tab-egresos">📤 Egresos</button>
+    <button class="sub-tab" onclick="setTab('ingresos')" id="tab-ingresos">📥 Ingresos</button>
+  </div>
+  <!-- SUB-NAV: Fiscalización -->
+  <div class="sub-nav" id="subnav-fiscalizacion" style="display:none">
+    <button class="sub-tab" onclick="setTab('cfdi')" id="tab-cfdi">🧾 CFDI</button>
+    <button class="sub-tab" onclick="setTab('conciliacion')" id="tab-conciliacion">🔗 Conciliación</button>
+    <button class="sub-tab" onclick="setTab('cuentas')" id="tab-cuentas">🏦 Cuentas</button>
+    <button class="sub-tab" onclick="setTab('reportes')" id="tab-reportes">📊 Reportes</button>
   </div>
   <div class="content" id="main-content"></div>
   <button class="fab" id="fab-btn" onclick="onFabClick()">＋</button>
@@ -1213,155 +1214,243 @@ async function initApp() {
   document.getElementById('app').style.display='flex';
   document.getElementById('top-user').textContent = currentUser.nombre + ' · ' + currentUser.rol;
   await loadAll();
-  setTab('dashboard');
+  setGrupo('presupuestal');
   aplicarRBAC();
 }
 
-// ── Límites de paginación por tabla ─────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// ARQUITECTURA DE DATOS — MÓDULOS INDEPENDIENTES
+// ═══════════════════════════════════════════════════════════════════
+// Control Presupuestal: lee obras/requisiciones de MetalTek (solo lectura)
+//                       + movimientos (ingresos manuales propios)
+// Fiscalización:        cfdi, cuentas_bancarias, conciliación (propios)
+// Planeación:           cxp, cxc, deuda (propios)
+// REGLA: ningún módulo escribe en tablas de otro módulo
+// ═══════════════════════════════════════════════════════════════════
+
 const PAGE_LIMITS = {
-  movimientos:         100,  // últimos 100 movimientos
-  cfdi_emitidos:        50,
-  cfdi_recibidos:       50,
-  movimientos_bancarios:200,
-  cuentas_por_pagar:   500,  // CxP: carga completa (crítico para planeación)
-  cuentas_por_cobrar:  200,
-  deuda_financiera:    100,
+  movimientos:           100,
+  requisiciones:         300,  // egresos desde MetalTek (solo lectura)
+  cfdi_emitidos:          50,
+  cfdi_recibidos:         50,
+  movimientos_bancarios: 200,
+  cuentas_por_pagar:     500,
+  cuentas_por_cobrar:    200,
+  deuda_financiera:      100,
 };
 
-// dbSafe: versión segura con log estructurado de errores
 async function dbSafe(method, path, body, contexto) {
   try {
     return await db(method, path, body) || [];
   } catch(e) {
-    console.error(`[Finanzas] Error en ${contexto || path}:`, e.message);
+    console.error('[Finanzas] Error en ' + (contexto||path) + ':', e.message);
     return [];
   }
 }
 
-async function loadAll() {
-  // Carga en paralelo agrupada por criticidad
-  // Grupo 1: catálogos base (siempre necesarios, sin límite)
+// ── Catálogos base (compartidos, sin límite) ─────────────────────────
+async function loadCatalogos() {
   const [_cuentas, _obras] = await Promise.all([
     dbSafe('GET','cuentas_bancarias?order=nombre', null, 'cuentas'),
-    dbSafe('GET','obras?order=nombre', null, 'obras'),
+    dbSafe('GET','obras?order=nombre',             null, 'obras'),
   ]);
-  cuentas = _cuentas; obras = _obras;
+  cuentas = _cuentas;
+  obras   = _obras;
+}
 
-  // Grupo 2: datos operativos con límite
+// ── MÓDULO 1: Control Presupuestal ───────────────────────────────────
+// Fuentes: obras (MetalTek, solo lectura), requisiciones (MetalTek, solo lectura),
+//          movimientos (Finanzas — solo ingresos manuales)
+async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_mov, _cfdiE, _cfdiR, _cxp, _cxc, _deuda, _movBanc] = await Promise.all([
-    dbSafe('GET',`movimientos?order=fecha.desc,created_at.desc&limit=${lim.movimientos}`, null, 'movimientos'),
-    dbSafe('GET',`cfdi_emitidos?order=fecha.desc&limit=${lim.cfdi_emitidos}`, null, 'cfdi_emitidos'),
-    dbSafe('GET',`cfdi_recibidos?order=fecha.desc&limit=${lim.cfdi_recibidos}`, null, 'cfdi_recibidos'),
-    dbSafe('GET',`cuentas_por_pagar?order=fecha_vencimiento.asc&limit=${lim.cuentas_por_pagar}`, null, 'cxp'),
-    dbSafe('GET',`cuentas_por_cobrar?order=fecha_vencimiento.asc&limit=${lim.cuentas_por_cobrar}`, null, 'cxc'),
-    dbSafe('GET',`deuda_financiera?order=created_at.desc&limit=${lim.deuda_financiera}`, null, 'deuda'),
-    dbSafe('GET',`movimientos_bancarios?order=fecha.desc&limit=${lim.movimientos_bancarios}`, null, 'mov_bancarios'),
+  const [_mov, _requis] = await Promise.all([
+    dbSafe('GET',
+      'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
+      null, 'movimientos_ingreso'),
+    // Requisiciones autorizadas de MetalTek — SOLO LECTURA, nunca se modifica desde Finanzas
+    dbSafe('GET',
+      'requisiciones?estado=eq.autorizada&order=fecha.desc&limit=' + lim.requisiciones,
+      null, 'requisiciones'),
   ]);
+  movimientos      = _mov;
+  requisicionesData = _requis;
+  console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + requisicionesData.length + ' requisiciones aprobadas');
+}
 
-  movimientos = _mov; cfdiEmitidos = _cfdiE; cfdiRecibidos = _cfdiR;
-  cxpData = _cxp; cxcData = _cxc; deudaData = _deuda;
-
-  // Reconstruir índice por cuenta para conciliación
+// ── MÓDULO 2: Fiscalización ──────────────────────────────────────────
+// Fuentes: cfdi_emitidos, cfdi_recibidos, cuentas_bancarias, movimientos_bancarios
+// Todo propio de Finanzas, carga manual o por importación
+async function loadFiscalizacion() {
+  const lim = PAGE_LIMITS;
+  const [_cfdiE, _cfdiR, _movBanc] = await Promise.all([
+    dbSafe('GET', 'cfdi_emitidos?order=fecha.desc&limit='   + lim.cfdi_emitidos,          null, 'cfdi_emitidos'),
+    dbSafe('GET', 'cfdi_recibidos?order=fecha.desc&limit='  + lim.cfdi_recibidos,          null, 'cfdi_recibidos'),
+    dbSafe('GET', 'movimientos_bancarios?order=fecha.desc&limit=' + lim.movimientos_bancarios, null, 'mov_bancarios'),
+  ]);
+  cfdiEmitidos  = _cfdiE;
+  cfdiRecibidos = _cfdiR;
   movBancariosDB = _movBanc;
   movBancariosPorCuenta = {};
-  movBancariosDB.forEach(m => {
+  movBancariosDB.forEach(function(m) {
     if(!movBancariosPorCuenta[m.cuenta_id]) movBancariosPorCuenta[m.cuenta_id] = [];
     movBancariosPorCuenta[m.cuenta_id].push(m);
   });
+  console.log('[Fiscalización] ' + cfdiEmitidos.length + ' CFDI emitidos, ' + cfdiRecibidos.length + ' recibidos');
 }
 
-// Carga lazy por módulo — solo los datos del tab activo
-async function loadForTab(tab) {
+// ── MÓDULO 3: Planeación ─────────────────────────────────────────────
+// Fuentes: cuentas_por_pagar, cuentas_por_cobrar, deuda_financiera
+// Todo propio de Finanzas, independiente de Control Presupuestal
+// IMPORTANTE: pagos en Planeación NO generan movimientos en Control Presupuestal
+async function loadPlaneacion() {
   const lim = PAGE_LIMITS;
-  if(tab === 'egresos' || tab === 'ingresos') {
-    movimientos = await dbSafe('GET',`movimientos?order=fecha.desc,created_at.desc&limit=${lim.movimientos}`, null, 'movimientos');
-  } else if(tab === 'cfdi') {
-    const [e,r] = await Promise.all([
-      dbSafe('GET',`cfdi_emitidos?order=fecha.desc&limit=${lim.cfdi_emitidos}`, null, 'cfdi_e'),
-      dbSafe('GET',`cfdi_recibidos?order=fecha.desc&limit=${lim.cfdi_recibidos}`, null, 'cfdi_r'),
-    ]);
-    cfdiEmitidos = e; cfdiRecibidos = r;
-  } else if(tab === 'planeacion') {
-    const [cxp,cxc,deu] = await Promise.all([
-      dbSafe('GET',`cuentas_por_pagar?order=fecha_vencimiento.asc&limit=${lim.cuentas_por_pagar}`, null, 'cxp'),
-      dbSafe('GET',`cuentas_por_cobrar?order=fecha_vencimiento.asc&limit=${lim.cuentas_por_cobrar}`, null, 'cxc'),
-      dbSafe('GET',`deuda_financiera?order=created_at.desc&limit=${lim.deuda_financiera}`, null, 'deuda'),
-    ]);
-    cxpData = cxp; cxcData = cxc; deudaData = deu;
-  }
+  const [_cxp, _cxc, _deuda] = await Promise.all([
+    dbSafe('GET', 'cuentas_por_pagar?order=fecha_vencimiento.asc&limit='  + lim.cuentas_por_pagar,  null, 'cxp'),
+    dbSafe('GET', 'cuentas_por_cobrar?order=fecha_vencimiento.asc&limit=' + lim.cuentas_por_cobrar, null, 'cxc'),
+    dbSafe('GET', 'deuda_financiera?order=created_at.desc&limit='         + lim.deuda_financiera,   null, 'deuda'),
+  ]);
+  cxpData   = _cxp;
+  cxcData   = _cxc;
+  deudaData = _deuda;
+  console.log('[Planeación] CxP:' + cxpData.length + ' CxC:' + cxcData.length + ' Deuda:' + deudaData.length);
+}
+
+// ── loadAll: carga inicial completa ─────────────────────────────────
+// Solo al iniciar sesión — después cada módulo carga sus propios datos
+async function loadAll() {
+  await loadCatalogos();
+  await Promise.all([
+    loadControlPresupuestal(),
+    loadFiscalizacion(),
+    loadPlaneacion(),
+  ]);
+}
+
+// ── Recarga selectiva por módulo activo ─────────────────────────────
+async function recargarModuloActivo() {
+  var GRUPO_PRES = ['dashboard','egresos','ingresos'];
+  var GRUPO_FISC = ['cfdi','conciliacion','cuentas','reportes'];
+  if(GRUPO_PRES.includes(currentTab))      { await loadCatalogos(); await loadControlPresupuestal(); }
+  else if(GRUPO_FISC.includes(currentTab)) { await loadCatalogos(); await loadFiscalizacion(); }
+  else if(currentTab === 'planeacion')     { await loadPlaneacion(); }
 }
 
 // ── TABS ─────────────────────────────────────────────
+var _grupoActivo = '';
+
+function setGrupo(grupo) {
+  // Mostrar/ocultar sub-navs
+  var subnavP = document.getElementById('subnav-presupuestal');
+  var subnavF = document.getElementById('subnav-fiscalizacion');
+  var btnP    = document.getElementById('tab-grupo-presupuestal');
+  var btnF    = document.getElementById('tab-grupo-fiscalizacion');
+  var btnPlan = document.getElementById('tab-planeacion');
+
+  // Quitar active de todos los tabs principales
+  [btnP, btnF, btnPlan].forEach(function(b){ if(b) b.classList.remove('active'); });
+
+  if(grupo === 'presupuestal') {
+    subnavP.style.display = 'flex';
+    subnavF.style.display = 'none';
+    if(btnP) btnP.classList.add('active');
+    _grupoActivo = 'presupuestal';
+    // Auto-seleccionar el primer sub-tab
+    if(currentTab !== 'dashboard' && currentTab !== 'egresos' && currentTab !== 'ingresos') {
+      setTab('dashboard');
+    } else {
+      // Remarcar el sub-tab actual
+      document.querySelectorAll('.sub-tab').forEach(function(b){ b.classList.remove('active'); });
+      var st = document.getElementById('tab-'+currentTab);
+      if(st) st.classList.add('active');
+    }
+  } else if(grupo === 'fiscalizacion') {
+    subnavF.style.display = 'flex';
+    subnavP.style.display = 'none';
+    if(btnF) btnF.classList.add('active');
+    _grupoActivo = 'fiscalizacion';
+    if(currentTab !== 'cfdi' && currentTab !== 'conciliacion' && currentTab !== 'cuentas' && currentTab !== 'reportes') {
+      setTab('cfdi');
+    } else {
+      document.querySelectorAll('.sub-tab').forEach(function(b){ b.classList.remove('active'); });
+      var st2 = document.getElementById('tab-'+currentTab);
+      if(st2) st2.classList.add('active');
+    }
+  }
+}
+
 function setTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.nav-tab,.nav-sub-tab').forEach(b=>b.classList.remove('active'));
 
+  // Determinar a qué grupo pertenece y mostrar su sub-nav
   var GRUPO_PRES = ['dashboard','egresos','ingresos'];
   var GRUPO_FISC = ['cfdi','conciliacion','cuentas','reportes'];
 
-  var labelPres = document.getElementById('tab-grupo-presupuestal');
-  var labelFisc = document.getElementById('tab-grupo-fiscalizacion');
+  var subnavP = document.getElementById('subnav-presupuestal');
+  var subnavF = document.getElementById('subnav-fiscalizacion');
+  var btnP    = document.getElementById('tab-grupo-presupuestal');
+  var btnF    = document.getElementById('tab-grupo-fiscalizacion');
+  var btnPlan = document.getElementById('tab-planeacion');
+
+  // Quitar active de nav principal y sub-tabs
+  [btnP, btnF, btnPlan].forEach(function(b){ if(b) b.classList.remove('active'); });
+  document.querySelectorAll('.sub-tab').forEach(function(b){ b.classList.remove('active'); });
 
   if(GRUPO_PRES.includes(tab)) {
-    var subTab = document.getElementById('tab-'+tab);
-    if(subTab) subTab.classList.add('active');
-    if(labelPres) labelPres.classList.add('group-active');
-    if(labelFisc) labelFisc.classList.remove('group-active');
+    if(subnavP) subnavP.style.display = 'flex';
+    if(subnavF) subnavF.style.display = 'none';
+    if(btnP) btnP.classList.add('active');
+    _grupoActivo = 'presupuestal';
   } else if(GRUPO_FISC.includes(tab)) {
-    var subTab2 = document.getElementById('tab-'+tab);
-    if(subTab2) subTab2.classList.add('active');
-    if(labelFisc) labelFisc.classList.add('group-active');
-    if(labelPres) labelPres.classList.remove('group-active');
+    if(subnavF) subnavF.style.display = 'flex';
+    if(subnavP) subnavP.style.display = 'none';
+    if(btnF) btnF.classList.add('active');
+    _grupoActivo = 'fiscalizacion';
   } else {
-    if(labelPres) labelPres.classList.remove('group-active');
-    if(labelFisc) labelFisc.classList.remove('group-active');
-    var t = document.getElementById('tab-'+tab);
-    if(t){ t.classList.add('active'); t.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}); }
+    // Tab independiente (planeación)
+    if(subnavP) subnavP.style.display = 'none';
+    if(subnavF) subnavF.style.display = 'none';
+    if(btnPlan) btnPlan.classList.add('active');
+    _grupoActivo = '';
   }
 
-  const fab = document.getElementById('fab-btn');
-  fab.style.display = ['egresos','ingresos','cuentas','cfdi','conciliacion','planeacion'].includes(tab) ? 'flex' : 'none';
-  const renders = {dashboard:renderDashboard,cuentas:renderCuentas,egresos:()=>renderMovLista('egreso'),ingresos:()=>renderMovLista('ingreso'),cfdi:renderCFDI,conciliacion:renderConciliacion,reportes:renderReportes,planeacion:renderPlaneacion};
+  // Marcar sub-tab activo
+  var st = document.getElementById('tab-'+tab);
+  if(st) st.classList.add('active');
+
+  // FAB
+  var fab = document.getElementById('fab-btn');
+  if(fab) fab.style.display = ['egresos','ingresos','cuentas','cfdi','conciliacion','planeacion'].includes(tab) ? 'flex' : 'none';
+
+  // Render
+  var renders = {
+    dashboard:    renderDashboard,
+    cuentas:      renderCuentas,
+    egresos:      async function(){ 
+                    if(!requisicionesData.length) {
+                      console.log('[Egresos] Cargando requisicionesData...');
+                      await loadControlPresupuestal();
+                    }
+                    console.log('[Egresos] requisicionesData:', requisicionesData.length, 'registros');
+                    renderMovLista('egreso');
+                    // Re-renderizar después de carga para asegurar que el DOM se actualiza
+                    document.getElementById('main-content').innerHTML = '';
+                    renderMovLista('egreso');
+                  },
+    ingresos:     function(){ renderMovLista('ingreso'); },
+    cfdi:         renderCFDI,
+    conciliacion: renderConciliacion,
+    reportes:     renderReportes,
+    planeacion:   renderPlaneacion
+  };
   if(renders[tab]) renders[tab]();
 }
 
-function cerrarTodos() {
-  document.getElementById('dd-presupuestal').style.display  = 'none';
-  document.getElementById('dd-fiscalizacion').style.display = 'none';
-  document.getElementById('arrow-pres').textContent = '▼';
-  document.getElementById('arrow-fisc').textContent = '▼';
-}
-
-function toggleGrupo(e) {
-  if(e) e.stopPropagation();
-  var dd = document.getElementById('dd-presupuestal');
-  var arr = document.getElementById('arrow-pres');
-  var isOpen = dd.style.display === 'block';
-  cerrarTodos();
-  if(!isOpen) { dd.style.display = 'block'; arr.textContent = '▲'; }
-}
-
-function toggleGrupoFisc(e) {
-  if(e) e.stopPropagation();
-  var dd = document.getElementById('dd-fiscalizacion');
-  var arr = document.getElementById('arrow-fisc');
-  var isOpen = dd.style.display === 'block';
-  cerrarTodos();
-  if(!isOpen) { dd.style.display = 'block'; arr.textContent = '▲'; }
-}
-
-// Alias legacy
-function cerrarGrupo()     { cerrarTodos(); }
-function cerrarGrupoFisc() { cerrarTodos(); }
-
-// Cerrar al clic fuera
-document.addEventListener('click', function(e) {
-  var gp = document.getElementById('grupo-presupuestal');
-  var gf = document.getElementById('grupo-fiscalizacion');
-  if(gp && !gp.contains(e.target)) document.getElementById('dd-presupuestal').style.display = 'none';
-  if(gf && !gf.contains(e.target)) document.getElementById('dd-fiscalizacion').style.display = 'none';
-});
+// Alias para compatibilidad con código legacy
+function cerrarTodos()     {}
+function cerrarGrupo()     {}
+function cerrarGrupoFisc() {}
+function toggleGrupo(e)    { setGrupo('presupuestal'); }
+function toggleGrupoFisc(e){ setGrupo('fiscalizacion'); }
 
 function onFabClick() {
   if(currentTab==='cuentas') openNewCuenta();
@@ -1373,10 +1462,18 @@ function onFabClick() {
 
 // ── DASHBOARD ─────────────────────────────────────────
 function renderDashboard() {
-  const egresos = movimientos.filter(m=>m.tipo==='egreso');
-  const ingresos = movimientos.filter(m=>m.tipo==='ingreso');
-  const totalEgr = egresos.reduce((s,m)=>s+(m.monto||0),0);
-  const totalIng = ingresos.reduce((s,m)=>s+(m.monto||0),0);
+  // ── Control Presupuestal: egresos = requisiciones aprobadas de MetalTek (solo lectura)
+  //                          ingresos = movimientos tipo ingreso (propios de Finanzas)
+  const ingresos  = movimientos.filter(m=>m.tipo==='ingreso');
+  // Egresos vienen de requisiciones aprobadas en MetalTek, no de movimientos propios
+  const totalEgr  = requisicionesData.reduce((s,r)=>s+(parseFloat(r.monto_cotizado)||0),0);
+  const totalIng  = ingresos.reduce((s,m)=>s+(m.monto||0),0);
+  // Para compatibilidad con código existente que usa 'egresos'
+  const egresos   = requisicionesData.map(function(r){
+    return {tipo:'egreso', monto:parseFloat(r.monto_cotizado)||0, fecha:r.fecha,
+            obra_id:r.obra_id, descripcion:r.folio||r.tipo, categoria:'Requisición',
+            proveedor_cliente:r.proveedor};
+  });
   const balance = totalIng - totalEgr;
   const totalCuentas = cuentas.reduce((s,c)=>s+(c.saldo_actual||c.saldo_inicial||0),0);
 
@@ -1683,19 +1780,47 @@ async function deleteMov(id) {
 }
 
 function renderMovLista(tipo) {
-  const movs = movimientos.filter(m=>m.tipo===tipo);
+  let movs;
+
+  if(tipo === 'egreso') {
+    // ── Control Presupuestal: egresos = requisiciones autorizadas de MetalTek ──
+    movs = requisicionesData.map(function(r) {
+      var obra = obras.find(function(o){ return o.id === r.obra_id; });
+      return {
+        id:                r.id,
+        tipo:              'egreso',
+        monto:             parseFloat(r.monto_cotizado)||0,
+        descripcion:       r.tipo || r.folio || 'Requisición',
+        categoria:         'Requisición MetalTek',
+        fecha:             r.fecha,
+        obra_id:           r.obra_id,
+        obra_nombre:       obra ? obra.nombre : (r.obra_id||''),
+        proveedor_cliente: r.proveedor||null,
+        folio:             r.folio||null,
+        estado:            r.estado||null,
+        urgencia:          r.urgencia||null,
+        solicitante:       r.solicitante_nombre||r.solicitante||null,
+        _esRequisicion:    true
+      };
+    }); // Sin filtro de monto — mostrar todas las autorizadas aunque monto_cotizado sea 0
+  } else {
+    // Ingresos: movimientos manuales propios de Finanzas
+    movs = movimientos.filter(function(m){ return m.tipo === tipo; });
+  }
+
   const total = movs.reduce((s,m)=>s+(m.monto||0),0);
   const isIng = tipo==='ingreso';
   const color = isIng?'var(--success)':'var(--danger)';
 
   if(!movs.length) {
-    document.getElementById('main-content').innerHTML=`<div class="empty"><div class="empty-icon">${isIng?'📥':'📤'}</div><div class="empty-title">Sin ${isIng?'ingresos':'egresos'}</div><div class="empty-sub">Toca ＋ para registrar</div></div>`;
+    document.getElementById('main-content').innerHTML=`<div class="empty"><div class="empty-icon">${isIng?'📥':'📤'}</div><div class="empty-title">Sin ${isIng?'ingresos':'egresos'}</div><div class="empty-sub">${tipo==='egreso'?'Las requisiciones autorizadas de MetalTek aparecerán aquí':'Toca ＋ para registrar'}</div></div>`;
     return;
   }
 
   let html = `<div class="hero-card" style="text-align:center">
     <div class="hero-label" style="color:${color};text-align:center">Total ${isIng?'ingresos':'egresos'}</div>
     <div class="hero-amount" style="color:${color};text-align:center">${fmt(total)}</div>
+    ${tipo==='egreso'?`<div class="hero-sub"><span class="chip" style="font-size:11px">📋 ${movs.length} requisiciones autorizadas · MetalTek</span></div>`:''}
   </div>`;
 
   const byMonth = {};
@@ -1716,10 +1841,12 @@ function renderMovLista(tipo) {
           ${isIng?'📥':'📤'}
         </div>
         <div style="flex:1">
-          <div class="item-main">${m.descripcion||'—'}</div>
+          <div class="item-main">${m.descripcion||'—'}${m.folio?` <span style="font-size:10px;color:var(--dim)">#${m.folio}</span>`:''}</div>
           <div class="item-sub">${m.categoria||'—'} · ${fmtDate(m.fecha)}</div>
-          ${obra?`<div class="item-sub" style="color:var(--accent2)">🏗 ${obra.nombre}</div>`:''}
+          ${obra?`<div class="item-sub" style="color:var(--accent2)">🏗 ${obra.nombre}</div>`:m.obra_nombre?`<div class="item-sub" style="color:var(--accent2)">🏗 ${m.obra_nombre}</div>`:''}
           ${m.proveedor_cliente?`<div class="item-sub">${m.proveedor_cliente}</div>`:''}
+          ${m.solicitante?`<div class="item-sub">👤 ${m.solicitante}</div>`:''}
+          ${m.urgencia?`<div class="item-sub" style="color:var(--warn)">⚡ ${m.urgencia}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0;margin-left:10px">
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
@@ -1727,7 +1854,10 @@ function renderMovLista(tipo) {
             ${m.url_comprobante?`<span class="comprobante-icon" onclick="abrirComprobante('${m.url_comprobante}')" title="Ver comprobante">📎</span>`:''}
           </div>
           ${m.iva?`<div style="font-size:10px;color:var(--dim)">+IVA ${fmt(m.iva)}</div>`:''}
-          ${(currentUser.rol==='director'||currentUser.rol==='admin')?`<button onclick="deleteMov('${m.id}')" style="border:none;background:none;color:var(--dim);font-size:11px;cursor:pointer;margin-top:4px;padding:2px 4px;border-radius:4px">🗑</button>`:''}
+          ${m._esRequisicion
+            ? `<div style="font-size:10px;color:var(--dim);margin-top:2px">MetalTek</div>`
+            : (currentUser.rol==='director'||currentUser.rol==='admin')?`<button onclick="deleteMov('${m.id}')" style="border:none;background:none;color:var(--dim);font-size:11px;cursor:pointer;margin-top:4px;padding:2px 4px;border-radius:4px">🗑</button>`:''
+          }
         </div>
       </div>`;
     });
@@ -1904,6 +2034,7 @@ let cfdiMasivoParsed = [];
 // movBancarios is now a dict keyed by cuenta_id: { 'cuenta_id': [{...mov...}] }
 let movBancariosPorCuenta = {};
 let movBancariosDB = [];
+let requisicionesData = []; // Solo lectura desde MetalTek — NO se modifica desde Finanzas
 let cxpData = [];       // cuentas por pagar
 let cxcData = [];       // cuentas por cobrar
 let deudaData = [];     // deuda financiera
@@ -3717,7 +3848,7 @@ async function guardarPagoCXC() {
 
     showToast('✅ Pago de '+fmt(pago)+' registrado correctamente');
     closeSheet('pago-cxc');
-    await loadAll();
+    await loadPlaneacion(); // Solo recarga Planeación — no toca Control Presupuestal
     renderPlaneacion();
 
   } catch(e) {
@@ -3927,11 +4058,12 @@ function aplicarRBAC() {
   if(esCapturista) {
     // ── Capturista: solo ve Planeación (módulo CxP) ───────────────────
     // Ocultar TODAS las pestañas excepto Planeación
-    // Ocultar grupo presupuestal, grupo fiscalización y demás tabs
-    var grupoEl = document.getElementById('grupo-presupuestal');
-    if(grupoEl) grupoEl.style.display = 'none';
-    var grupoFiscEl = document.getElementById('grupo-fiscalizacion');
-    if(grupoFiscEl) grupoFiscEl.style.display = 'none';
+    // Capturista: ocultar grupos completos
+    ['tab-grupo-presupuestal','tab-grupo-fiscalizacion',
+     'subnav-presupuestal','subnav-fiscalizacion'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = 'none';
+    });
 
     // Mantener visible solo Planeación
     var tabPlan = document.getElementById('tab-planeacion');
@@ -3950,14 +4082,12 @@ function aplicarRBAC() {
 
   } else {
     // ── Director / Admin: mostrar todas las pestañas ──────────────────
-    var grupoEl2 = document.getElementById('grupo-presupuestal');
-    if(grupoEl2) grupoEl2.style.display = '';
-    var grupoFiscEl2 = document.getElementById('grupo-fiscalizacion');
-    if(grupoFiscEl2) grupoFiscEl2.style.display = '';
-    ['tab-planeacion'].forEach(function(tabId){
-      var el = document.getElementById(tabId);
+    // Restaurar grupos para director/admin
+    ['tab-grupo-presupuestal','tab-grupo-fiscalizacion','tab-planeacion'].forEach(function(id){
+      var el = document.getElementById(id);
       if(el) el.style.display = '';
     });
+    // Sub-navs se muestran al hacer clic — no restaurar aquí
     var fab = document.getElementById('fab-btn');
     if(fab) fab.style.display = '';
   }
@@ -4167,28 +4297,17 @@ async function guardarPagoCXP() {
       estatus:        nuevoEstatus
     });
 
-    // 2. Registrar como egreso en movimientos
-    await db('POST','movimientos',{
-      tipo:              'egreso',
-      categoria:         'Subcontrato',
-      descripcion:       'Pago CxP: '+(x.proveedor||'')+
-                         (x.factura?' FAC#'+x.factura:'')+
-                         (nuevoEstatus==='PAGADO'?' (LIQUIDADO)':' (PARCIAL '+fmt(nuevoSaldo)+' pend.)'),
-      monto:             pago,
-      fecha:             fecha,
-      forma_pago:        document.getElementById('pcxp-forma').value,
-      referencia:        document.getElementById('pcxp-ref').value.trim()||null,
-      obra_id:           x.obra_id||null,
-      proveedor_cliente: x.proveedor||null,
-      created_by:        currentUser.nombre
-    });
+    // AISLAMIENTO DE MÓDULOS: el pago de CxP se registra SOLO en cuentas_por_pagar
+    // NO se inserta en 'movimientos' — esa tabla es exclusiva de Control Presupuestal
+    // Los egresos de Control Presupuestal vienen de requisiciones aprobadas en MetalTek
+    console.log('[Planeación] Pago CxP actualizado. Módulo aislado de Control Presupuestal.');
 
     var msg = nuevoSaldo<=0.01
       ? '✅ Pago completo — CxP liquidada'
       : '✅ Pago de '+fmt(pago)+' registrado · Saldo: '+fmt(nuevoSaldo);
     showToast(msg);
     closeSheet('pago-cxp');
-    await loadAll();
+    await loadPlaneacion(); // Solo recarga datos de Planeación
     renderPlaneacion();
 
   } catch(e) {
