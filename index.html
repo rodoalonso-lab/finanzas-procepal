@@ -1487,13 +1487,31 @@ function renderDashboard() {
   const ivaAcred = egresos.reduce((s,m)=>s+(m.iva||0),0);
   const ivaACargo = ivaTrasl - ivaAcred;
 
+  // POR OBRA: egresos = requisiciones autorizadas de MetalTek, ingresos = movimientos manuales
   const porObra = {};
-  movimientos.filter(m=>m.obra_id).forEach(m=>{
-    const o = obras.find(x=>x.id===m.obra_id);
-    if(!o) return;
-    if(!porObra[o.id]) porObra[o.id]={nombre:o.nombre,pres:o.presupuesto||0,egr:0,ing:0};
-    if(m.tipo==='egreso') porObra[o.id].egr+=(m.monto||0);
-    else porObra[o.id].ing+=(m.monto||0);
+
+  // Primero inicializar todas las obras con presupuesto
+  obras.forEach(function(o) {
+    porObra[o.id] = {nombre: o.nombre, pres: o.presupuesto||0, egr: 0, ing: 0};
+  });
+
+  // Egresos desde requisiciones autorizadas de MetalTek
+  requisicionesData.forEach(function(r) {
+    if(!r.obra_id) return;
+    if(!porObra[r.obra_id]) {
+      const o = obras.find(x=>x.id===r.obra_id);
+      porObra[r.obra_id] = {nombre: o?o.nombre:r.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
+    }
+    porObra[r.obra_id].egr += parseFloat(r.monto_cotizado)||0;
+  });
+
+  // Ingresos desde movimientos manuales de Finanzas
+  ingresos.filter(m=>m.obra_id).forEach(function(m) {
+    if(!porObra[m.obra_id]) {
+      const o = obras.find(x=>x.id===m.obra_id);
+      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
+    }
+    porObra[m.obra_id].ing += (m.monto||0);
   });
 
   const mesLabel = hoy.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
@@ -3990,7 +4008,9 @@ function renderRentabilidadObra(obraId) {
   if(!obra) return '<div class="empty"><div class="empty-sub">Selecciona una obra</div></div>';
 
   var presupuesto = obra.presupuesto||0;
-  var ejercido    = movimientos.filter(function(m){return m.tipo==='egreso'&&m.obra_id===obraId;}).reduce(function(s,m){return s+(m.monto||0);},0);
+  // Egresos = requisiciones autorizadas de MetalTek para esta obra
+  var ejercido    = requisicionesData.filter(function(r){return r.obra_id===obraId;}).reduce(function(s,r){return s+(parseFloat(r.monto_cotizado)||0);},0);
+  // Cobrado = ingresos manuales registrados en Finanzas para esta obra
   var cobrado     = cxcData.filter(function(x){return x.obra_id===obraId;}).reduce(function(s,x){return s+(x.pagado||0);},0);
   var porCobrar   = cxcData.filter(function(x){return x.obra_id===obraId;}).reduce(function(s,x){return s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)));},0);
   var margen      = cobrado>0 ? Math.round((cobrado-ejercido)/cobrado*100) : 0;
