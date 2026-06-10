@@ -126,6 +126,13 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
   transition:color .2s,border-color .2s;letter-spacing:.3px;
 }
 .logout-btn:hover{color:var(--danger);border-color:var(--danger)33}
+.refresh-btn{
+  font-size:14px;background:none;border:1px solid var(--border);border-radius:8px;
+  padding:5px 10px;cursor:pointer;transition:transform .3s,border-color .2s;color:var(--dim);
+}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+.refresh-btn.spinning{animation:spin-refresh .6s linear infinite}
+@keyframes spin-refresh{to{transform:rotate(360deg)}}
 
 /* ── NAV TABS ── */
 .nav-tabs{
@@ -555,6 +562,7 @@ body.tema-claro .sub-nav{background:#FFFFFF}
   <div class="theme-track"><div class="theme-thumb"></div></div>
   <i class="ti ti-sun theme-icon theme-icon-sol" aria-hidden="true"></i>
 </div>
+<button class="refresh-btn" id="refresh-btn" onclick="doRefresh()" title="Actualizar datos">↻</button>
 <button class="logout-btn" onclick="doLogout()">Salir</button>
   </div>
   <!-- NAV PRINCIPAL -->
@@ -1189,6 +1197,14 @@ async function doLogin() {
 
 function doLogout(){ localStorage.removeItem('fin_session'); currentUser=null; location.reload(); }
 
+async function doRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  if(btn) btn.classList.add('spinning');
+  try { await loadAll(); renderVista(); } catch(e){ showToast('Error al actualizar',true); }
+  if(btn) btn.classList.remove('spinning');
+  showToast('✓ Datos actualizados');
+}
+
 // ── INIT APP ──────────────────────────────────────────
 async function initApp() {
   document.getElementById('login-screen').style.display='none';
@@ -1548,20 +1564,45 @@ function renderDashboard() {
   </div>`;
 
   if(Object.keys(porObra).length) {
-    html += `<div class="section-title">Por Obra</div>`;
-    Object.values(porObra).forEach(o=>{
-      const pct = o.pres>0?Math.min(100,Math.round((o.egr/o.pres)*100)):0;
-      const color = pct>=90?'var(--danger)':pct>=70?'var(--warn)':'var(--accent)';
-      html += `<div class="card">
+    html += `<div class="section-title">Balance por Obra</div>`;
+    Object.values(porObra).sort((a,b)=>b.ing-a.ing).forEach(o=>{
+      const balance  = o.ing - o.egr;
+      const pctRaw   = o.pres>0?Math.min(100,(o.egr/o.pres)*100):0;
+      const pct      = pctRaw;
+      const pctStr   = pctRaw<1&&pctRaw>0 ? pctRaw.toFixed(1)+'%' : Math.round(pctRaw)+'%';
+      const pctColor = pctRaw>=90?'var(--danger)':pctRaw>=70?'var(--warn)':'var(--accent)';
+      const balColor = balance>=0?'var(--success)':'var(--danger)';
+      const balSign  = balance>=0?'+':'-';
+      html += `<div class="card" style="margin-bottom:12px">
+        <!-- Encabezado -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div class="item-main">${o.nombre}</div>
-          <span class="hero-badge" style="background:${pct>=90?'rgba(255,77,106,.12)':pct>=70?'rgba(244,168,74,.12)':'rgba(0,229,176,.12)'};color:${color};font-size:12px">${pct}%</span>
+          <div class="item-main" style="font-size:14px;font-weight:700">${o.nombre}</div>
+          <div style="text-align:right">
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;color:${balColor}">${balSign}${fmt(Math.abs(balance))}</div>
+            <div style="font-size:9px;color:var(--dim);font-weight:500">BALANCE</div>
+          </div>
         </div>
-        <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div>
-        <div style="display:flex;justify-content:space-between;margin-top:8px">
-          <div class="item-sub">Presupuesto: ${fmt(o.pres)}</div>
-          <div class="item-sub">Ejercido: <span style="color:${color};font-weight:600">${fmt(o.egr)}</span></div>
+        <!-- Grid de cifras -->
+        <div style="display:grid;grid-template-columns:1fr 1fr${o.pres>0?' 1fr':''};gap:8px;margin-bottom:10px">
+          <div style="background:rgba(0,209,140,.06);border:1px solid rgba(0,209,140,.15);border-radius:8px;padding:8px 10px">
+            <div style="font-size:9px;color:var(--dim);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Ingresos</div>
+            <div style="font-size:13px;font-weight:700;color:var(--success)">${fmt(o.ing)}</div>
+          </div>
+          <div style="background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.15);border-radius:8px;padding:8px 10px">
+            <div style="font-size:9px;color:var(--dim);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Egresos</div>
+            <div style="font-size:13px;font-weight:700;color:var(--danger)">${fmt(o.egr)}</div>
+          </div>
+          ${o.pres>0?`<div style="background:rgba(77,142,255,.06);border:1px solid rgba(77,142,255,.15);border-radius:8px;padding:8px 10px">
+            <div style="font-size:9px;color:var(--dim);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Presupuesto</div>
+            <div style="font-size:13px;font-weight:700;color:var(--accent2)">${fmt(o.pres)}</div>
+          </div>`:''}
         </div>
+        <!-- Barra de presupuesto ejercido -->
+        ${o.pres>0?`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:10px;color:var(--dim)">Presupuesto ejercido</div>
+          <div style="font-size:10px;font-weight:700;color:${pctColor}">${pctStr}</div>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar" style="width:${Math.max(pctRaw,pctRaw>0?0.5:0)}%;min-width:${pctRaw>0?'4px':'0'};background:${pctColor}"></div></div>`:''}
       </div>`;
     });
   }
@@ -1589,7 +1630,7 @@ function renderDashboard() {
   // ── Resumen Planeación en Dashboard ──────────────────
   const vencidasHoy = cxpData.filter(x=>x.estatus!=='PAGADO'&&diasParaVencer(x.fecha_vencimiento)<=0).length;
   const proximas7   = cxpData.filter(x=>x.estatus!=='PAGADO'&&diasParaVencer(x.fecha_vencimiento)>0&&diasParaVencer(x.fecha_vencimiento)<=7).length;
-  const totalCXP    = cxpData.filter(x=>x.estatus!=='PAGADO').reduce((s,x)=>s+(x.monto||0),0);
+  const totalCXP    = cxpData.filter(x=>x.estatus!=='PAGADO').reduce((s,x)=>s+Math.max(0,(x.monto||0)-(x.pagado_parcial||0)),0);
   const totalCXC    = cxcData.reduce((s,x)=>s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0))),0);
   const totalDeuda  = deudaData.reduce((s,x)=>s+(x.saldo_actual||0),0);
   if(cxpData.length||cxcData.length||deudaData.length) {
@@ -3506,7 +3547,7 @@ function renderPlaneacion() {
 
   var esCapturista = currentUser && currentUser.rol==='capturista';
 
-  const totalCXP   = cxpData.filter(function(x){return x.estatus!=='PAGADO';}).reduce(function(s,x){return s+(x.monto||0);},0);
+  const totalCXP   = cxpData.filter(function(x){return x.estatus!=='PAGADO';}).reduce(function(s,x){return s+Math.max(0,(x.monto||0)-(x.pagado_parcial||0));},0);
   const totalCXC   = cxcData.reduce(function(s,x){return s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)));},0);
   const totalDeuda = deudaData.reduce(function(s,x){return s+(x.saldo_actual||0);},0);
   const vencidas   = cxpData.filter(function(x){return x.estatus==='VENCIDO';}).length;
@@ -3575,8 +3616,8 @@ function renderCXPList() {
     return true;
   });
 
-  var totalPend = itemsAll.filter(function(x){return x.estatus!=='PAGADO'&&filtrosEstatus.includes(x.estatus||'PENDIENTE');}).reduce(function(s,x){return s+(x.monto||0);},0);
-  var totalVenc = itemsAll.filter(function(x){return x.estatus==='VENCIDO';}).reduce(function(s,x){return s+(x.monto||0);},0);
+  var totalPend = itemsAll.filter(function(x){return x.estatus!=='PAGADO'&&filtrosEstatus.includes(x.estatus||'PENDIENTE');}).reduce(function(s,x){return s+Math.max(0,(x.monto||0)-(x.pagado_parcial||0));},0);
+  var totalVenc = itemsAll.filter(function(x){return x.estatus==='VENCIDO';}).reduce(function(s,x){return s+Math.max(0,(x.monto||0)-(x.pagado_parcial||0));},0);
   var totalPag  = itemsAll.filter(function(x){return x.estatus==='PAGADO';}).reduce(function(s,x){return s+(x.monto||0);},0);
 
   var ss = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;cursor:pointer';
