@@ -1727,7 +1727,7 @@ async function saveCuenta() {
     if(clabe) payload.clabe = clabe;
     const res = await fetch(SUPABASE_URL+'/rest/v1/cuentas_bancarias',{
       method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+getToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+(await getValidToken()),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(payload)
     });
     if(!res.ok){
@@ -1993,7 +1993,7 @@ async function saveCFDI() {
         method: 'POST',
         headers: {
           'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + getToken(),
+          'Authorization': 'Bearer ' + (await getValidToken()),
           'Content-Type': 'application/json',
           'Prefer': 'return=representation,resolution=ignore-duplicates'
         },
@@ -2032,7 +2032,7 @@ async function deleteCFDI(uuid, tabla) {
       method: 'DELETE',
       headers: {
         'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + getToken(),
+        'Authorization': 'Bearer ' + (await getValidToken()),
         'Prefer': 'return=representation'  // Devuelve las filas eliminadas
       }
     });
@@ -2103,7 +2103,7 @@ async function deleteSeleccionados() {
         method: 'DELETE',
         headers: {
           'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + getToken(),
+          'Authorization': 'Bearer ' + (await getValidToken()),
           'Content-Type': 'application/json',
           'Prefer': 'return=representation'
         }
@@ -3756,7 +3756,8 @@ function renderCXPList() {
         html += '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">';
         html += '<button onclick="abrirPagoParcialCXP(\''+x.id+'\')" style="flex:2;padding:8px;border-radius:8px;border:1px solid var(--accent)44;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">💰 Pago parcial</button>';
         html += '<button onclick="marcarPagadoCXP(\''+x.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--success)44;background:rgba(0,209,140,.08);color:var(--success);font-size:11px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">✓ Total</button>';
-        html += '<button onclick="deleteCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑</button>';
+        html += '<button onclick="openEditCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer" title="Editar">✏️</button>';
+        html += '<button onclick="deleteCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer" title="Eliminar">🗑</button>';
         html += '</div>';
       }
       html += '</div>';
@@ -3887,7 +3888,8 @@ function renderCXCList() {
     html += '</div>';
     html += '<div style="display:flex;gap:8px;margin-top:6px">';
     html += '<button onclick="abrirPagoCXC(\''+x.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--accent)44;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">💰 Registrar pago</button>';
-    if(isAdmin) html += '<button onclick="deleteCXC(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑</button>';
+    if(isAdmin) html += '<button onclick="openEditCXC(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer" title="Editar">✏️</button>';
+    if(isAdmin) html += '<button onclick="deleteCXC(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer" title="Eliminar">🗑</button>';
     html += '</div>';
     html += '</div></div>';
   });
@@ -3954,7 +3956,11 @@ function openNewPlan() {
   else                       openNewDeuda();
 }
 
+var _editCXPId = null;
+var _editCXCId = null;
+
 function openNewCXP() {
+  _editCXPId = null;
   ['cxp-proveedor','cxp-concepto','cxp-factura','cxp-beneficiario','cxp-obs','cxp-gestion'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('cxp-monto').value='';
   document.getElementById('cxp-vencimiento').value=new Date().toISOString().slice(0,10);
@@ -3962,7 +3968,32 @@ function openNewCXP() {
   document.getElementById('cxp-prioridad').value='MEDIA';
   document.getElementById('cxp-obra').innerHTML='<option value="">— General —</option>'+obras.map(function(o){return '<option value="'+o.id+'">'+o.nombre+'</option>';}).join('');
   document.getElementById('cxp-periodo').value=new Date().toLocaleString('es-MX',{month:'long'}).toUpperCase();
+  document.getElementById('sheet-cxp-title').textContent='Nueva Cuenta x Pagar';
   document.getElementById('cxp-save-btn').textContent='Guardar';
+  document.getElementById('cxp-save-btn').disabled=false;
+  openSheet('cxp');
+}
+
+function openEditCXP(id) {
+  var x = cxpData.find(function(c){return c.id===id;});
+  if(!x) return;
+  _editCXPId = id;
+  document.getElementById('cxp-razon').value       = x.razon||'RAM';
+  document.getElementById('cxp-proveedor').value   = x.proveedor||'';
+  document.getElementById('cxp-concepto').value    = x.concepto||'';
+  document.getElementById('cxp-monto').value       = x.monto||'';
+  document.getElementById('cxp-factura').value     = x.factura||'';
+  document.getElementById('cxp-vencimiento').value = x.fecha_vencimiento||'';
+  document.getElementById('cxp-periodo').value     = x.periodo||'ENERO';
+  document.getElementById('cxp-prioridad').value   = x.prioridad||'MEDIA';
+  document.getElementById('cxp-estatus').value     = x.estatus||'PENDIENTE';
+  document.getElementById('cxp-beneficiario').value= x.beneficiario||'';
+  document.getElementById('cxp-obs').value         = x.observaciones||'';
+  document.getElementById('cxp-gestion').value     = x.gestion||'';
+  document.getElementById('cxp-obra').innerHTML    = '<option value="">— General —</option>'+obras.map(function(o){return '<option value="'+o.id+'"'+(o.id===x.obra_id?' selected':'')+'>'+o.nombre+'</option>';}).join('');
+  document.getElementById('cxp-comprobante-preview').textContent = x.url_comprobante ? '📎 Comprobante existente' : '';
+  document.getElementById('sheet-cxp-title').textContent = 'Editar Cuenta x Pagar';
+  document.getElementById('cxp-save-btn').textContent='Actualizar';
   document.getElementById('cxp-save-btn').disabled=false;
   openSheet('cxp');
 }
@@ -3976,9 +4007,8 @@ async function saveCXP() {
   try {
     var obraId = document.getElementById('cxp-obra').value||null;
     var obra   = obraId?obras.find(function(o){return o.id===obraId;}):null;
-    // Leer comprobante como base64 (si se adjuntó uno)
     var urlComprobante = await leerComprobante('cxp-comprobante','cxp-comprobante-preview');
-    await db('POST','cuentas_por_pagar',{
+    var payload = {
       razon:document.getElementById('cxp-razon').value, obra_id:obraId,
       obra_nombre:obra?obra.nombre:null, proveedor:proveedor,
       concepto:document.getElementById('cxp-concepto').value.trim()||null, monto:monto,
@@ -3989,11 +4019,18 @@ async function saveCXP() {
       estatus:document.getElementById('cxp-estatus').value,
       beneficiario:document.getElementById('cxp-beneficiario').value.trim()||null,
       observaciones:document.getElementById('cxp-obs').value.trim()||null,
-      gestion:document.getElementById('cxp-gestion').value.trim()||null,
-      url_comprobante:urlComprobante||null,
-      created_by:currentUser.nombre
-    });
-    showToast('✅ Cuenta por pagar guardada');
+      gestion:document.getElementById('cxp-gestion').value.trim()||null
+    };
+    if(urlComprobante) payload.url_comprobante = urlComprobante;
+    if(_editCXPId) {
+      await db('PATCH','cuentas_por_pagar?id=eq.'+_editCXPId, payload);
+      showToast('✅ Cuenta por pagar actualizada');
+    } else {
+      payload.created_by = currentUser.nombre;
+      await db('POST','cuentas_por_pagar', payload);
+      showToast('✅ Cuenta por pagar guardada');
+    }
+    _editCXPId = null;
     closeSheet('cxp'); await loadAll(); renderPlaneacion();
   } catch(e){showToast('Error: '+e.message,true);}
   btn.textContent='Guardar'; btn.disabled=false;
@@ -4021,14 +4058,40 @@ function calcCXC() {
 }
 
 function openNewCXC() {
+  _editCXCId = null;
   ['cxc-cliente','cxc-factura','cxc-obs','cxc-posible'].forEach(function(id){document.getElementById(id).value='';});
   ['cxc-subtotal','cxc-iva','cxc-monto','cxc-saldo','cxc-pagado'].forEach(function(id){document.getElementById(id).value='0';});
   document.getElementById('cxc-vencimiento').value='';
+  document.getElementById('cxc-negocio').value='RAL';
   document.getElementById('cxc-obra').innerHTML='<option value="">— General —</option>'+obras.map(function(o){return '<option value="'+o.id+'">'+o.nombre+'</option>';}).join('');
-  // Llenar datalist con clientes únicos de CxC
   var clientesUnicos = [...new Set(cxcData.map(function(x){return x.cliente;}).filter(Boolean))].sort();
   document.getElementById('cxc-cliente-list').innerHTML = clientesUnicos.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  document.querySelector('#sheet-cxc .sheet-title').textContent = 'Nueva Cuenta x Cobrar';
   document.getElementById('cxc-save-btn').textContent='Guardar';
+  document.getElementById('cxc-save-btn').disabled=false;
+  openSheet('cxc');
+}
+
+function openEditCXC(id) {
+  var x = cxcData.find(function(c){return c.id===id;});
+  if(!x) return;
+  _editCXCId = id;
+  document.getElementById('cxc-cliente').value    = x.cliente||'';
+  document.getElementById('cxc-negocio').value    = x.negocio||'RAL';
+  document.getElementById('cxc-factura').value    = x.factura||'';
+  document.getElementById('cxc-subtotal').value   = x.subtotal||'0';
+  document.getElementById('cxc-iva').value        = x.iva||'0';
+  document.getElementById('cxc-monto').value      = x.monto||'0';
+  document.getElementById('cxc-pagado').value     = x.pagado||'0';
+  document.getElementById('cxc-saldo').value      = x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0));
+  document.getElementById('cxc-vencimiento').value= x.fecha_vencimiento||'';
+  document.getElementById('cxc-obs').value        = x.observaciones||'';
+  document.getElementById('cxc-posible').value    = x.posible_pago||'';
+  document.getElementById('cxc-obra').innerHTML   = '<option value="">— General —</option>'+obras.map(function(o){return '<option value="'+o.id+'"'+(o.id===x.obra_id?' selected':'')+'>'+o.nombre+'</option>';}).join('');
+  var clientesUnicos = [...new Set(cxcData.map(function(c){return c.cliente;}).filter(Boolean))].sort();
+  document.getElementById('cxc-cliente-list').innerHTML = clientesUnicos.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  document.querySelector('#sheet-cxc .sheet-title').textContent = 'Editar Cuenta x Cobrar';
+  document.getElementById('cxc-save-btn').textContent='Actualizar';
   document.getElementById('cxc-save-btn').disabled=false;
   openSheet('cxc');
 }
@@ -4042,7 +4105,7 @@ async function saveCXC() {
   try {
     var obraId = document.getElementById('cxc-obra').value||null;
     var obra   = obraId?obras.find(function(o){return o.id===obraId;}):null;
-    await db('POST','cuentas_por_cobrar',{
+    var payload = {
       cliente:cliente, negocio:document.getElementById('cxc-negocio').value,
       factura:document.getElementById('cxc-factura').value.trim()||null,
       subtotal:parseFloat(document.getElementById('cxc-subtotal').value)||0,
@@ -4052,10 +4115,17 @@ async function saveCXC() {
       obra_id:obraId, obra_nombre:obra?obra.nombre:null,
       fecha_vencimiento:document.getElementById('cxc-vencimiento').value||null,
       observaciones:document.getElementById('cxc-obs').value.trim()||null,
-      posible_pago:document.getElementById('cxc-posible').value.trim()||null,
-      created_by:currentUser.nombre
-    });
-    showToast('✅ Cuenta por cobrar guardada');
+      posible_pago:document.getElementById('cxc-posible').value.trim()||null
+    };
+    if(_editCXCId) {
+      await db('PATCH','cuentas_por_cobrar?id=eq.'+_editCXCId, payload);
+      showToast('✅ Cuenta por cobrar actualizada');
+    } else {
+      payload.created_by = currentUser.nombre;
+      await db('POST','cuentas_por_cobrar', payload);
+      showToast('✅ Cuenta por cobrar guardada');
+    }
+    _editCXCId = null;
     closeSheet('cxc'); await loadAll(); renderPlaneacion();
   } catch(e){showToast('Error: '+e.message,true);}
   btn.textContent='Guardar'; btn.disabled=false;
@@ -4454,7 +4524,7 @@ async function executeImport() {
         method:'POST',
         headers:{
           'apikey':SUPABASE_KEY,
-          'Authorization':'Bearer '+getToken(),
+          'Authorization':'Bearer '+(await getValidToken()),
           'Content-Type':'application/json',
           'Prefer':'return=minimal'
         },
@@ -4531,7 +4601,7 @@ function calcPagoCXC() {
 
 async function guardarPagoCXC() {
   var x = cxcData.find(function(c){return c.id===_pagoCXCId;});
-  if(!x) return;
+  if(!x) { showToast('No se encontró la factura. Recarga la página.', true); return; }
 
   var pago  = parseFloat(document.getElementById('pago-monto').value)||0;
   var fecha = document.getElementById('pago-fecha').value;
@@ -4547,13 +4617,14 @@ async function guardarPagoCXC() {
   try {
     var nuevoPagado = Math.round(((x.pagado||0)+pago)*100)/100;
     var nuevoSaldo  = Math.max(0, Math.round((saldoActual-pago)*100)/100);
+    var validToken  = await getValidToken();
 
     // Llamada RPC atómica — si falla cualquier paso, Supabase hace ROLLBACK
     // SQL del stored procedure en instrucciones de deploy (ver abajo)
     var rpcRes = await fetch(SUPABASE_URL+'/rest/v1/rpc/registrar_pago_cxc', {
       method: 'POST',
       headers: {
-        'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+getToken(),
+        'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+validToken,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
