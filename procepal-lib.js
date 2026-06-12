@@ -22,8 +22,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 // ── SESIÓN / TOKEN ────────────────────────────────────────────────────
 // Cada app guarda la sesión bajo una clave distinta en localStorage.
-// getToken() intenta todas las claves conocidas y devuelve el JWT activo,
-// o el anon key como fallback.
+// getToken() devuelve el JWT activo (síncrono, sin verificar expiración).
+// getValidToken() verifica expiración y refresca automáticamente si es necesario.
 const _SESSION_KEYS = ['fin_session', 'sb-session', 'chk-session', 'req-session'];
 
 function getToken() {
@@ -39,12 +39,53 @@ function getToken() {
   return SUPABASE_KEY;
 }
 
+// Devuelve token válido, refrescando la sesión si está por vencer o ya venció.
+async function getValidToken() {
+  try {
+    for (const key of _SESSION_KEYS) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const s = JSON.parse(raw);
+      const token = s.access_token || s.token || (s.session && s.session.access_token);
+      if (!token) continue;
+
+      // Si el token vence en menos de 60 segundos (o ya venció), refrescarlo
+      const expiry = s.expires_at || 0;
+      if (expiry && Date.now() > expiry - 60000 && s.refresh_token) {
+        try {
+          const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+            method: 'POST',
+            headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: s.refresh_token })
+          });
+          const data = await r.json();
+          if (data.access_token) {
+            const updated = {
+              ...s,
+              access_token:  data.access_token,
+              refresh_token: data.refresh_token || s.refresh_token,
+              expires_at:    Date.now() + (data.expires_in || 3600) * 1000
+            };
+            localStorage.setItem(key, JSON.stringify(updated));
+            return data.access_token;
+          }
+        } catch (e2) { /* fallback al token actual */ }
+      }
+
+      return token;
+    }
+  } catch (e) { /* silencioso */ }
+  return SUPABASE_KEY;
+}
+
 // ── BASE DE DATOS: wrapper REST de Supabase ───────────────────────────
 // Soporta reintentos automáticos en errores de red transitorio.
+// Refresca el JWT automáticamente si está por vencer o ya venció.
 async function db(method, path, body, retries = 1) {
+  const token = await getValidToken();
   const headers = {
     'apikey': SUPABASE_KEY,
-    'Authorization': 'Bearer ' + getToken(),
+    'Authorization': 'Bearer ' + token,
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
@@ -71,11 +112,12 @@ async function db(method, path, body, retries = 1) {
 // Devuelve la URL pública o null si falla (sin lanzar excepción).
 async function uploadStorage(bucket, storagePath, blob, contentType = 'application/octet-stream') {
   try {
+    const token = await getValidToken();
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath}`, {
       method: 'PUT',
       headers: {
         'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + getToken(),
+        'Authorization': 'Bearer ' + token,
         'Content-Type': contentType,
         'x-upsert': 'true'
       },
