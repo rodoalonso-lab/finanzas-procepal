@@ -1260,18 +1260,22 @@ async function loadCatalogos() {
 //          movimientos (Finanzas — solo ingresos manuales)
 async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_mov, _requis] = await Promise.all([
+  const [_movIng, _movEgr, _requis] = await Promise.all([
     dbSafe('GET',
       'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
       null, 'movimientos_ingreso'),
+    dbSafe('GET',
+      'movimientos?tipo=eq.egreso&order=fecha.desc&limit=' + lim.movimientos,
+      null, 'movimientos_egreso'),
     // Requisiciones autorizadas de MetalTek — SOLO LECTURA, nunca se modifica desde Finanzas
     dbSafe('GET',
       'requisiciones?estado=eq.autorizada&order=fecha.desc&limit=' + lim.requisiciones,
       null, 'requisiciones'),
   ]);
-  movimientos      = _mov;
+  movimientos       = _movIng;
+  egresosManualData = _movEgr;
   requisicionesData = _requis;
-  console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + requisicionesData.length + ' requisiciones aprobadas');
+  console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas');
 }
 
 // ── MÓDULO 2: Fiscalización ──────────────────────────────────────────
@@ -1462,15 +1466,17 @@ function renderDashboard() {
   // ── Control Presupuestal: egresos = requisiciones aprobadas de MetalTek (solo lectura)
   //                          ingresos = movimientos tipo ingreso (propios de Finanzas)
   const ingresos  = movimientos.filter(m=>m.tipo==='ingreso');
-  // Egresos vienen de requisiciones aprobadas en MetalTek, no de movimientos propios
-  const totalEgr  = requisicionesData.reduce((s,r)=>s+(parseFloat(r.monto_cotizado)||0),0);
+  // Egresos = requisiciones aprobadas MetalTek + egresos manuales de Finanzas
+  const totalEgrReqis = requisicionesData.reduce((s,r)=>s+(parseFloat(r.monto_cotizado)||0),0);
+  const totalEgrManual = egresosManualData.reduce((s,m)=>s+(m.monto||0),0);
+  const totalEgr  = totalEgrReqis + totalEgrManual;
   const totalIng  = ingresos.reduce((s,m)=>s+(m.monto||0),0);
-  // Para compatibilidad con código existente que usa 'egresos'
+  // Combinar para cálculos de proyección y por-obra
   const egresos   = requisicionesData.map(function(r){
     return {tipo:'egreso', monto:parseFloat(r.monto_cotizado)||0, fecha:r.fecha,
             obra_id:r.obra_id, descripcion:r.folio||r.tipo, categoria:'Requisición',
             proveedor_cliente:r.proveedor};
-  });
+  }).concat(egresosManualData);
   const balance = totalIng - totalEgr;
   const totalCuentas = cuentas.reduce((s,c)=>s+(c.saldo_actual||c.saldo_inicial||0),0);
 
@@ -1500,6 +1506,15 @@ function renderDashboard() {
       porObra[r.obra_id] = {nombre: o?o.nombre:r.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
     }
     porObra[r.obra_id].egr += parseFloat(r.monto_cotizado)||0;
+  });
+
+  // Egresos manuales registrados en Finanzas
+  egresosManualData.filter(function(m){return m.obra_id;}).forEach(function(m) {
+    if(!porObra[m.obra_id]) {
+      const o = obras.find(x=>x.id===m.obra_id);
+      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
+    }
+    porObra[m.obra_id].egr += (m.monto||0);
   });
 
   // Ingresos desde movimientos manuales de Finanzas
@@ -1823,8 +1838,8 @@ function renderMovLista(tipo) {
   let movs;
 
   if(tipo === 'egreso') {
-    // ── Control Presupuestal: egresos = requisiciones autorizadas de MetalTek ──
-    movs = requisicionesData.map(function(r) {
+    // ── Control Presupuestal: egresos = requisiciones MetalTek + egresos manuales ──
+    var requisMapped = requisicionesData.map(function(r) {
       var obra = obras.find(function(o){ return o.id === r.obra_id; });
       return {
         id:                r.id,
@@ -1843,12 +1858,15 @@ function renderMovLista(tipo) {
         _esRequisicion:    true
       };
     }); // Sin filtro de monto — mostrar todas las autorizadas aunque monto_cotizado sea 0
+    // Combinar MetalTek + egresos manuales, ordenar por fecha descendente
+    movs = requisMapped.concat(egresosManualData).sort(function(a,b){
+      return (b.fecha||'') < (a.fecha||'') ? -1 : 1;
+    });
   } else {
     // Ingresos: movimientos manuales propios de Finanzas
     movs = movimientos.filter(function(m){ return m.tipo === tipo; });
   }
 
-  const total = movs.reduce((s,m)=>s+(m.monto||0),0);
   const isIng = tipo==='ingreso';
   const color = isIng?'var(--success)':'var(--danger)';
 
@@ -1857,14 +1875,45 @@ function renderMovLista(tipo) {
     return;
   }
 
+  // ── Filtro por proyecto ───────────────────────────────────────────────
+  var filtroObra = _movFiltroObra[tipo] || '';
+  // Proyectos que aparecen en esta lista (para el select)
+  var obrasEnLista = [];
+  movs.forEach(function(m) {
+    var nombre = m.obra_nombre || (obras.find(function(o){return o.id===m.obra_id;})||{}).nombre || '';
+    if(m.obra_id && nombre && !obrasEnLista.find(function(x){return x.id===m.obra_id;}))
+      obrasEnLista.push({id: m.obra_id, nombre: nombre});
+  });
+  // Aplicar filtro
+  var movsVis = filtroObra ? movs.filter(function(m){return m.obra_id===filtroObra;}) : movs;
+
+  const total = movsVis.reduce(function(s,m){return s+(m.monto||0);},0);
+  const totalTodos = movs.reduce(function(s,m){return s+(m.monto||0);},0);
+
+  var ss = 'padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-family:Space Grotesk,sans-serif';
+
   let html = `<div class="hero-card" style="text-align:center">
-    <div class="hero-label" style="color:${color};text-align:center">Total ${isIng?'ingresos':'egresos'}</div>
+    <div class="hero-label" style="color:${color};text-align:center">Total ${isIng?'ingresos':'egresos'}${filtroObra?' (proyecto)':''}</div>
     <div class="hero-amount" style="color:${color};text-align:center">${fmt(total)}</div>
-    ${tipo==='egreso'?`<div class="hero-sub"><span class="chip" style="font-size:11px">📋 ${movs.length} requisiciones autorizadas · MetalTek</span></div>`:''}
+    ${tipo==='egreso'?`<div class="hero-sub"><span class="chip" style="font-size:11px">📋 ${requisicionesData.length} requisiciones MetalTek${egresosManualData.length?' · '+egresosManualData.length+' egresos manuales':''}</span></div>`:''}
   </div>`;
 
+  // Barra de filtro por proyecto
+  if(obrasEnLista.length > 1 || filtroObra) {
+    html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <select onchange="_movFiltroObra['${tipo}']=this.value;renderMovLista('${tipo}')" style="${ss};flex:1">
+        <option value="">🏗 Todos los proyectos${filtroObra?' — '+fmt(totalTodos)+' total':''}</option>
+        ${obrasEnLista.map(function(o){
+          var tot = movs.filter(function(m){return m.obra_id===o.id;}).reduce(function(s,m){return s+(m.monto||0);},0);
+          return '<option value="'+o.id+'"'+(filtroObra===o.id?' selected':'')+'>'+o.nombre+' — '+fmt(tot)+'</option>';
+        }).join('')}
+      </select>
+      ${filtroObra?`<button onclick="_movFiltroObra['${tipo}']='';renderMovLista('${tipo}')" style="${ss};color:var(--dim);white-space:nowrap">✕ Limpiar</button>`:''}
+    </div>`;
+  }
+
   const byMonth = {};
-  movs.forEach(m=>{ const mes=(m.fecha||'').slice(0,7); if(!byMonth[mes]) byMonth[mes]=[]; byMonth[mes].push(m); });
+  movsVis.forEach(m=>{ const mes=(m.fecha||'').slice(0,7); if(!byMonth[mes]) byMonth[mes]=[]; byMonth[mes].push(m); });
 
   Object.keys(byMonth).sort().reverse().forEach(mes=>{
     const label = mes ? new Date(mes+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'}) : 'Sin fecha';
@@ -2773,10 +2822,12 @@ let cfdiMasivoParsed = [];
 let movBancariosPorCuenta = {};
 let movBancariosDB = [];
 let requisicionesData = []; // Solo lectura desde MetalTek — NO se modifica desde Finanzas
+let egresosManualData = []; // Egresos manuales registrados en Finanzas (movimientos tipo=egreso)
 let cxpData = [];       // cuentas por pagar
 let cxcData = [];       // cuentas por cobrar
 let deudaData = [];     // deuda financiera
 let _planTab = 'cxp';  // sub-tab activo
+let _movFiltroObra = { egreso: '', ingreso: '' }; // '' = todos los proyectos
 let cuentaConcilActiva = null; // cuenta_id currently selected in conciliacion
 let concTab = 'pendientes';
 let ligandoMovId = null;
@@ -3558,7 +3609,8 @@ function renderPlaneacion() {
   html += '<div class="stat-grid" style="margin-bottom:14px">';
   html += '<div class="stat-box" style="border-color:rgba(255,77,106,.3)"><div class="stat-label" style="color:var(--danger)">Por Pagar</div><div class="stat-val" style="color:var(--danger);font-size:17px">'+fmt(totalCXP)+'</div><div class="stat-sub">'+vencidas+' vencidas</div></div>';
   if(!esCapturista) {
-    html += '<div class="stat-box" style="border-color:rgba(0,209,140,.3)"><div class="stat-label" style="color:var(--success)">Por Cobrar</div><div class="stat-val" style="color:var(--success);font-size:17px">'+fmt(totalCXC)+'</div><div class="stat-sub">'+cxcData.length+' facturas</div></div>';
+    var cxcPendientes = cxcData.filter(function(x){return (x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)))>0.01;}).length;
+    html += '<div class="stat-box" style="border-color:rgba(0,209,140,.3)"><div class="stat-label" style="color:var(--success)">Por Cobrar</div><div class="stat-val" style="color:var(--success);font-size:17px">'+fmt(totalCXC)+'</div><div class="stat-sub">'+cxcPendientes+' facturas</div></div>';
     html += '<div class="stat-box" style="border-color:rgba(155,126,255,.3)"><div class="stat-label" style="color:var(--purple)">Deuda Total</div><div class="stat-val" style="color:var(--purple);font-size:17px">'+fmt(totalDeuda)+'</div><div class="stat-sub">'+deudaData.length+' créditos</div></div>';
     var pos = totalCXC - totalCXP;
     html += '<div class="stat-box" style="border-color:rgba(77,142,255,.3)"><div class="stat-label" style="color:var(--accent2)">Posición Neta</div><div class="stat-val" style="color:'+(pos>=0?'var(--success)':'var(--danger)')+';font-size:17px">'+fmt(pos)+'</div><div class="stat-sub">CxC - CxP</div></div>';
@@ -3571,7 +3623,7 @@ function renderPlaneacion() {
   // Capturista: solo ve sub-tab CxP
   var tabs = esCapturista
     ? [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')']]
-    : [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcData.length+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección']];
+    : [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcPendientes+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección']];
   // Forzar sub-tab CxP si capturista intenta navegar a otro
   if(esCapturista && _planTab !== 'cxp') _planTab = 'cxp';
   tabs.forEach(function(t) {
@@ -4617,15 +4669,14 @@ async function guardarPagoCXC() {
   try {
     var nuevoPagado = Math.round(((x.pagado||0)+pago)*100)/100;
     var nuevoSaldo  = Math.max(0, Math.round((saldoActual-pago)*100)/100);
-    var nuevoEstatus = nuevoSaldo <= 0.01 ? 'PAGADO' : x.estatus;
 
     // AISLAMIENTO DE MÓDULOS: pagos de CxC solo actualizan cuentas_por_cobrar.
     // NO se usa el RPC registrar_pago_cxc porque inserta en 'movimientos',
     // contaminando Control Presupuestal con datos de Planeación.
+    // NOTA: cuentas_por_cobrar NO tiene campo 'estatus' — no se envía.
     await db('PATCH','cuentas_por_cobrar?id=eq.'+_pagoCXCId, {
-      pagado:  nuevoPagado,
-      saldo:   nuevoSaldo,
-      estatus: nuevoEstatus
+      pagado: nuevoPagado,
+      saldo:  nuevoSaldo
     });
 
     var msg = nuevoSaldo <= 0.01
