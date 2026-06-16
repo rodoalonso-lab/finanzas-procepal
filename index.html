@@ -610,10 +610,10 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     <div class="form-group"><div class="form-label">Descripción *</div>
       <input class="form-input" id="sm-desc" type="text" placeholder="Descripción del movimiento">
     </div>
-    <div class="form-group"><div class="form-label">Monto *</div>
+    <div class="form-group"><div class="form-label">Monto sin IVA *</div>
       <input class="form-input" id="sm-monto" type="number" placeholder="0.00" step="0.01" min="0">
     </div>
-    <div class="form-group"><div class="form-label">IVA</div>
+    <div class="form-group"><div class="form-label">IVA (se calcula sobre el monto)</div>
       <select class="form-input" id="sm-iva">
         <option value="0">Sin IVA</option>
         <option value="16">16%</option>
@@ -1152,7 +1152,7 @@ async function doLogin() {
     const expiresAt    = Date.now() + (data.expires_in||3600)*1000;
 
     // Paso 2 — Verificar perfil y acceso a esta app en user_profiles
-    const upRes = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${data.user.id}&select=nombre,rol,apps,activo`, {
+    const upRes = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${data.user.id}&select=nombre,rol,apps,activo,permisos`, {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + accessToken }
     });
     const upData = await upRes.json();
@@ -1172,21 +1172,25 @@ async function doLogin() {
         : 'Tu cuenta está desactivada. Contacta al administrador.';
       btn.textContent='Iniciar sesión'; btn.disabled=false; return;
     }
-    if (!Array.isArray(up.apps) || !up.apps.includes('finanzas')) {
+    // Acceso: nuevo sistema (permisos.finanzas.acceso) O sistema anterior (apps[])
+    const finPerm = up.permisos?.finanzas;
+    const tieneAccesoFin = (finPerm?.acceso === true) || (Array.isArray(up.apps) && up.apps.includes('finanzas'));
+    if (!tieneAccesoFin) {
       await revokeToken();
       document.getElementById('l-err').textContent = 'No tienes acceso a Finanzas. Contacta al administrador.';
       btn.textContent='Iniciar sesión'; btn.disabled=false; return;
     }
 
     // Paso 3 — Sesión válida: guardar solo token y datos de perfil (nunca la contraseña)
-    currentUser = { nombre: up.nombre||email, rol: up.rol, email: email };
+    currentUser = { nombre: up.nombre||email, rol: up.rol, email: email, permisos: up.permisos || {} };
     localStorage.setItem('fin_session', JSON.stringify({
       access_token:  accessToken,
       refresh_token: refreshToken,
       expires_at:    expiresAt,
       nombre:        currentUser.nombre,
       rol:           currentUser.rol,
-      email:         email
+      email:         email,
+      permisos:      currentUser.permisos
     }));
     await initApp();
   } catch(e){
@@ -3555,14 +3559,14 @@ function exportarMes(mes) {
                 nombre: s.nombre, rol: s.rol, email: s.email
               };
               localStorage.setItem('fin_session', JSON.stringify(updated));
-              currentUser = {nombre:s.nombre, rol:s.rol, email:s.email};
+              currentUser = {nombre:s.nombre, rol:s.rol, email:s.email, permisos:s.permisos||{}};
               await loadAll(); initApp();
             } else { localStorage.removeItem('fin_session'); }
           } catch(e2){ localStorage.removeItem('fin_session'); }
         } else { localStorage.removeItem('fin_session'); }
       } else {
         // Token vigente — restaurar sesión
-        currentUser = {nombre:s.nombre, rol:s.rol, email:s.email};
+        currentUser = {nombre:s.nombre, rol:s.rol, email:s.email, permisos:s.permisos||{}};
         await loadAll(); initApp();
       }
     } catch(e){ localStorage.removeItem('fin_session'); }
@@ -4882,6 +4886,7 @@ function renderRentabilidadObra(obraId) {
 // ══════════════════════════════════════════════════════════════════════
 function aplicarRBAC() {
   var esCapturista = currentUser && currentUser.rol==='capturista';
+  var esAdmin      = currentUser && (currentUser.rol==='admin' || currentUser.rol==='director');
 
   // ── Ocultar saldos globales (solo director/admin los ven) ──────────
   document.querySelectorAll('.rbac-saldo').forEach(function(el){
@@ -4895,39 +4900,50 @@ function aplicarRBAC() {
 
   if(esCapturista) {
     // ── Capturista: solo ve Planeación (módulo CxP) ───────────────────
-    // Ocultar TODAS las pestañas excepto Planeación
-    // Capturista: ocultar grupos completos
     ['tab-grupo-presupuestal','tab-grupo-fiscalizacion',
      'subnav-presupuestal','subnav-fiscalizacion'].forEach(function(id){
       var el = document.getElementById(id);
       if(el) el.style.display = 'none';
     });
-
-    // Mantener visible solo Planeación
     var tabPlan = document.getElementById('tab-planeacion');
     if(tabPlan) tabPlan.style.display = '';
-
-    // Ocultar FAB (no puede crear movimientos)
     var fab = document.getElementById('fab-btn');
     if(fab) fab.style.display = 'none';
-
-    // Redirigir siempre a Planeación y abrir sub-tab CxP
-    if(currentTab !== 'planeacion') {
-      setTab('planeacion');
-    }
-    // Asegurar que se abre en CxP al entrar
+    if(currentTab !== 'planeacion') { setTab('planeacion'); }
     _planTab = 'cxp';
 
   } else {
-    // ── Director / Admin: mostrar todas las pestañas ──────────────────
-    // Restaurar grupos para director/admin
+    // ── Restaurar todas las pestañas primero ──────────────────────────
     ['tab-grupo-presupuestal','tab-grupo-fiscalizacion','tab-planeacion'].forEach(function(id){
       var el = document.getElementById(id);
       if(el) el.style.display = '';
     });
-    // Sub-navs se muestran al hacer clic — no restaurar aquí
     var fab = document.getElementById('fab-btn');
     if(fab) fab.style.display = '';
+
+    // ── Aplicar permisos de módulo si no es admin/director ────────────
+    if(!esAdmin && currentUser && currentUser.permisos) {
+      var mods = (currentUser.permisos.finanzas && currentUser.permisos.finanzas.modulos) || {};
+      // Solo aplicar si hay permisos definidos (al menos 1 clave)
+      if(Object.keys(mods).length > 0) {
+        var cpTab   = document.getElementById('tab-grupo-presupuestal');
+        var fiscTab = document.getElementById('tab-grupo-fiscalizacion');
+        var planTab = document.getElementById('tab-planeacion');
+        if(cpTab)   cpTab.style.display   = mods.control_presupuestal !== false ? '' : 'none';
+        if(fiscTab) fiscTab.style.display = mods.fiscalizacion         !== false ? '' : 'none';
+        if(planTab) planTab.style.display = mods.planeacion            !== false ? '' : 'none';
+
+        // Si la pestaña activa quedó oculta, redirigir a la primera visible
+        var cpVis   = mods.control_presupuestal !== false;
+        var fiscVis = mods.fiscalizacion         !== false;
+        var planVis = mods.planeacion            !== false;
+        if(!cpVis && !fiscVis && planVis && currentTab !== 'planeacion') {
+          setTab('planeacion');
+        } else if(!cpVis && fiscVis && _grupoActivo === 'presupuestal') {
+          setGrupo('fiscalizacion');
+        }
+      }
+    }
   }
 }
 
