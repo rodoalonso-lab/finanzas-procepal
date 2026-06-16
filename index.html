@@ -1601,6 +1601,15 @@ function renderDashboard() {
       <div class="stat-val" style="color:${ivaACargo>0?'var(--danger)':'var(--success)'}">${fmt(ivaACargo)}</div>
     </div>
   </div>
+  ${totalPresupuestos>0?`
+  <div class="card" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <div>
+      <div class="stat-label" style="color:var(--purple);margin-bottom:2px">💼 Total presupuestado (obras)</div>
+      <div style="font-size:11px;color:var(--dim)">${obras.filter(o=>o.presupuesto>0).length} obras con presupuesto asignado</div>
+    </div>
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;color:var(--purple);white-space:nowrap">${fmt(totalPresupuestos)}</div>
+  </div>`:''}
+
 
   <div class="card">
     <div class="stat-label" style="margin-bottom:12px">${mesLabel.toUpperCase()}</div>
