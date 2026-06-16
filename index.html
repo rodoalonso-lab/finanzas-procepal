@@ -1109,7 +1109,15 @@ async function supaAuth(email, pass) {
     method:'POST', headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({email,password:pass})
   });
-  return res.json();
+  const data = await res.json();
+  // Supabase GoTrue v2 usa error_code+msg en vez de error+error_description
+  if(!res.ok) {
+    return {
+      error:             data.error_code || data.error || 'auth_error',
+      error_description: data.error_description || data.msg || 'Credenciales incorrectas'
+    };
+  }
+  return data;
 }
 
 // ── HELPERS ──────────────────────────────────────────
@@ -1205,9 +1213,15 @@ function doLogout(){ localStorage.removeItem('fin_session'); currentUser=null; l
 async function doRefresh() {
   const btn = document.getElementById('refresh-btn');
   if(btn) btn.classList.add('spinning');
-  try { await loadAll(); renderVista(); } catch(e){ showToast('Error al actualizar',true); }
-  if(btn) btn.classList.remove('spinning');
-  showToast('✓ Datos actualizados');
+  try {
+    await loadAll();
+    renderVista();
+    showToast('✓ Datos actualizados');
+  } catch(e){
+    showToast('Error al actualizar', true);
+  } finally {
+    if(btn) btn.classList.remove('spinning');
+  }
 }
 
 // ── INIT APP ──────────────────────────────────────────
@@ -3539,13 +3553,28 @@ function renderPLObra(obraId) {
   el.innerHTML = renderRentabilidadObra(obraId);
 }
 
+function csvCell(val) {
+  const s = String(val == null ? '' : val);
+  // Si contiene coma, comilla o salto de línea, envolver en comillas y escapar comillas internas
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
 function exportarMes(mes) {
   const movsMes = movimientos.filter(m=>(m.fecha||'').startsWith(mes));
   let csv = 'Fecha,Tipo,Categoría,Descripción,Proveedor/Cliente,Monto,IVA,Total,Forma Pago,Referencia,Obra\n';
   movsMes.forEach(m=>{
     const obra = obras.find(o=>o.id===m.obra_id);
     const total = (m.monto||0)+(m.iva||0);
-    csv += `${m.fecha},${m.tipo},${m.categoria||''},${(m.descripcion||'').replace(/,/g,' ')},${(m.proveedor_cliente||'').replace(/,/g,' ')},${m.monto||0},${m.iva||0},${total},${m.forma_pago||''},${m.referencia||''},${obra?obra.nombre.replace(/,/g,' '):''}\n`;
+    csv += [
+      csvCell(m.fecha), csvCell(m.tipo), csvCell(m.categoria||''),
+      csvCell(m.descripcion||''), csvCell(m.proveedor_cliente||''),
+      m.monto||0, m.iva||0, total,
+      csvCell(m.forma_pago||''), csvCell(m.referencia||''),
+      csvCell(obra ? obra.nombre : '')
+    ].join(',') + '\n';
   });
   const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);
