@@ -1518,6 +1518,7 @@ function renderDashboard() {
   }).concat(egresosManualData);
   const balance = totalIng - totalEgr;
   const totalCuentas = cuentas.reduce((s,c)=>s+(c.saldo_actual||c.saldo_inicial||0),0);
+  const totalPresupuestos = obras.reduce((s,o)=>s+(o.presupuesto||0),0);
 
   const hoy = new Date();
   const mesActual = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
