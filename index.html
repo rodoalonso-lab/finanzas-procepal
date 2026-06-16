@@ -3952,7 +3952,7 @@ function renderCXCList() {
   html += '<div><div class="stat-label" style="color:var(--accent)">Saldo pendiente</div><div style="font-family:Bricolage Grotesque,sans-serif;font-size:17px;font-weight:800;color:var(--accent)">'+fmt(totalSaldo)+'</div></div>';
   html += '</div>';
 
-  html += '<input type="text" placeholder="Buscar cliente, factura, obra..." value="'+(window._cxcBusq||'')+'" oninput="window._cxcBusq=this.value;renderPlaneacion()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;margin-bottom:8px">';
+  html += '<input type="text" placeholder="Buscar cliente, factura, obra..." value="'+(window._cxcBusq||'')+'" oninput="window._cxcBusq=this.value;clearTimeout(window._busqTimer);window._busqTimer=setTimeout(renderPlaneacion,350)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;margin-bottom:8px">';
 
   html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">';
   html += '<select onchange="window._cxcCliente=this.value;renderPlaneacion()" style="'+ss+';flex:2;min-width:140px"><option value="">Cliente: Todos</option>';
