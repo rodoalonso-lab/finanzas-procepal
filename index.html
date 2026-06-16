@@ -3651,7 +3651,7 @@ function renderPlaneacion() {
   const el = document.getElementById('main-content');
   if(!el) return;
 
-  var esCapturista = currentUser && currentUser.rol==='capturista';
+  var esCapturista = currentUser && currentUser.rol!=='admin' && currentUser.rol!=='director';
 
   const totalCXP   = cxpData.filter(function(x){return x.estatus!=='PAGADO';}).reduce(function(s,x){return s+Math.max(0,(x.monto||0)-(x.pagado_parcial||0));},0);
   const totalCXC   = cxcData.reduce(function(s,x){return s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)));},0);
@@ -3729,7 +3729,7 @@ function renderCXPList() {
 
   var ss = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;cursor:pointer';
   var html = '';
-  var _esCapturista = currentUser && currentUser.rol==='capturista';
+  var _esCapturista = currentUser && currentUser.rol!=='admin' && currentUser.rol!=='director';
 
   // KPIs — capturista solo ve total pendiente, sin montos de vencido ni pagado
   if(!_esCapturista) {
@@ -4936,7 +4936,7 @@ function renderRentabilidadObra(obraId) {
 // MEJORA 3 — RBAC: ocultar elementos según rol
 // ══════════════════════════════════════════════════════════════════════
 function aplicarRBAC() {
-  var esCapturista = currentUser && currentUser.rol==='capturista';
+  var esCapturista = currentUser && currentUser.rol!=='admin' && currentUser.rol!=='director';
   var esAdmin      = currentUser && (currentUser.rol==='admin' || currentUser.rol==='director');
 
   // ── Ocultar saldos globales (solo director/admin los ven) ──────────
