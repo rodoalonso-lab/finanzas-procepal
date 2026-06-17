@@ -850,7 +850,7 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     <div class="form-group"><div class="form-label">Observaciones</div>
       <textarea class="form-input" id="cxp-obs" placeholder="Notas adicionales" rows="2"></textarea></div>
     <div class="form-group"><div class="form-label">Gestión</div>
-      <input class="form-input" id="cxp-gestion" type="text" placeholder="Responsable (ANDY, JAZ, BRENDA...)"></div>
+      <select class="form-input" id="cxp-gestion"><option value="">— Sin asignar —</option></select></div>
     <div class="form-group"><div class="form-label">📎 Comprobante (PDF o imagen)</div>
       <input type="file" id="cxp-comprobante" accept=".pdf,.jpg,.jpeg,.png" class="form-input" style="padding:8px;cursor:pointer">
       <div id="cxp-comprobante-preview" style="font-size:11px;color:var(--dim);margin-top:4px"></div>
@@ -3660,6 +3660,9 @@ function prioColor(p) {
 function renderPlaneacion() {
   const el = document.getElementById('main-content');
   if(!el) return;
+  // Guardar foco y posicion del cursor antes de re-renderizar
+  var _focusId  = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
+  var _focusPos = (_focusId && document.activeElement.selectionStart != null) ? document.activeElement.selectionStart : null;
 
   var _modsP = (currentUser && currentUser.permisos && currentUser.permisos.finanzas && currentUser.permisos.finanzas.modulos) || {};
   var esCapturista = currentUser && currentUser.rol!=='admin' && currentUser.rol!=='director' && !_modsP.plan_cxc;
@@ -3706,6 +3709,11 @@ function renderPlaneacion() {
   else                              html += renderProyeccion();
 
   el.innerHTML = html;
+  // Restaurar foco y cursor despues de re-renderizar
+  if(_focusId) {
+    var _rel = document.getElementById(_focusId);
+    if(_rel) { _rel.focus(); if(_focusPos !== null) try { _rel.setSelectionRange(_focusPos, _focusPos); } catch(e) {} }
+  }
 }
 
 function setPlanTab(tab) { _planTab = tab; renderPlaneacion(); }
@@ -4078,9 +4086,27 @@ function openNewPlan() {
 var _editCXPId = null;
 var _editCXCId = null;
 
+async function poblarGestionSelect(valorActual) {
+  var sel = document.getElementById('cxp-gestion');
+  if(!sel) return;
+  try {
+    var usuarios = await dbSafe('GET','user_profiles?activo=eq.true&select=nombre&order=nombre.asc');
+    sel.innerHTML = '<option value="">— Sin asignar —</option>';
+    (usuarios||[]).forEach(function(u){
+      if(!u.nombre) return;
+      var nombre = u.nombre.trim().toUpperCase();
+      sel.innerHTML += '<option value="'+nombre+'"'+(nombre===(valorActual||'').toUpperCase()?' selected':'')+'>'+u.nombre+'</option>';
+    });
+    if(valorActual && !Array.from(sel.options).some(function(o){return o.value===(valorActual||'').toUpperCase();})) {
+      sel.innerHTML += '<option value="'+valorActual+'" selected>'+valorActual+'</option>';
+    }
+  } catch(e) { console.warn('No se pudo cargar usuarios para gestión',e); }
+}
+
 function openNewCXP() {
   _editCXPId = null;
-  ['cxp-proveedor','cxp-concepto','cxp-factura','cxp-beneficiario','cxp-obs','cxp-gestion'].forEach(function(id){document.getElementById(id).value='';});
+  ['cxp-proveedor','cxp-concepto','cxp-factura','cxp-beneficiario','cxp-obs'].forEach(function(id){document.getElementById(id).value='';});
+  poblarGestionSelect('');
   document.getElementById('cxp-monto').value='';
   document.getElementById('cxp-vencimiento').value=new Date().toISOString().slice(0,10);
   document.getElementById('cxp-estatus').value='PENDIENTE';
@@ -4108,7 +4134,7 @@ function openEditCXP(id) {
   document.getElementById('cxp-estatus').value     = x.estatus||'PENDIENTE';
   document.getElementById('cxp-beneficiario').value= x.beneficiario||'';
   document.getElementById('cxp-obs').value         = x.observaciones||'';
-  document.getElementById('cxp-gestion').value     = x.gestion||'';
+  poblarGestionSelect(x.gestion||'');
   document.getElementById('cxp-obra').innerHTML    = '<option value="">— General —</option>'+obras.map(function(o){return '<option value="'+o.id+'"'+(o.id===x.obra_id?' selected':'')+'>'+o.nombre+'</option>';}).join('');
   document.getElementById('cxp-comprobante-preview').textContent = x.url_comprobante ? '📎 Comprobante existente' : '';
   document.getElementById('sheet-cxp-title').textContent = 'Editar Cuenta x Pagar';
