@@ -3924,6 +3924,196 @@ async function deleteOC(id) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// MÓDULO: SOLICITUDES DE PAGO
+// ══════════════════════════════════════════════════════════════════════════
+
+function activarSelMode()  { _cxpSelMode = true;  _cxpSelected.clear(); renderPlaneacion(); }
+function cancelarSelMode() { _cxpSelMode = false; _cxpSelected.clear(); renderPlaneacion(); }
+function toggleCXPSel(id) {
+  if(_cxpSelected.has(id)) _cxpSelected.delete(id);
+  else _cxpSelected.add(id);
+  renderPlaneacion();
+}
+
+function abrirEnviarSolicitud() {
+  if(_cxpSelected.size === 0) { showToast('Selecciona al menos un pago','warn'); return; }
+  var total = Array.from(_cxpSelected).reduce(function(s,id){
+    var x = cxpData.find(function(c){ return c.id===id; });
+    return s + (x ? Math.max(0,(x.monto||0)-(x.pagado_parcial||0)) : 0);
+  },0);
+  var items = Array.from(_cxpSelected).map(function(id){
+    var x = cxpData.find(function(c){ return c.id===id; });
+    return x ? '<div style="font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between"><span>'+(x.proveedor||'—')+(x.concepto?' · <span style="color:var(--dim)">'+x.concepto+'</span>':'')+'</span><span style="color:var(--danger);font-weight:700">'+fmt(Math.max(0,(x.monto||0)-(x.pagado_parcial||0)))+'</span></div>' : '';
+  }).join('');
+  document.getElementById('sheet-oc-title').textContent = 'Solicitud de Pago';
+  openDynSheet('oc', `
+    <div style="background:var(--surface);border-radius:10px;padding:12px;margin-bottom:12px;max-height:200px;overflow-y:auto">
+      ${items}
+      <div style="display:flex;justify-content:space-between;padding-top:8px;font-weight:700;font-size:12px">
+        <span>Total solicitado</span><span style="color:var(--danger)">${fmt(total)}</span>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Nota para el director (urgencias, compromisos, fecha límite)</label>
+      <textarea class="form-input" id="sol-nota" rows="3" placeholder="Ej: FONACOT vence el lunes, proveedor RAM tiene compromiso esta semana..."></textarea></div>
+    <button class="btn btn-primary" style="width:100%" onclick="guardarSolicitud()">📤 Enviar solicitud</button>
+  `);
+}
+
+async function guardarSolicitud() {
+  var nota = (document.getElementById('sol-nota').value||'').trim();
+  if(_cxpSelected.size===0) return;
+  try {
+    var sol = await db('POST','solicitudes_pago',{
+      fecha: new Date().toISOString().slice(0,10),
+      nota: nota||null,
+      creado_por: currentUser.nombre||currentUser.email,
+      estatus: 'PENDIENTE'
+    });
+    var solId = (Array.isArray(sol)?sol[0]:sol).id;
+    var items = Array.from(_cxpSelected).map(function(id,idx){
+      var x = cxpData.find(function(c){ return c.id===id; });
+      return { solicitud_id:solId, cxp_id:id, proveedor:x?x.proveedor:'', concepto:x?x.concepto:'', monto:x?Math.max(0,(x.monto||0)-(x.pagado_parcial||0)):0, prioridad:idx+1, aprobado:null };
+    });
+    await Promise.all(items.map(function(it){ return db('POST','solicitud_pago_items',it); }));
+    showToast('✅ Solicitud enviada al director');
+    closeSheet('oc');
+    _cxpSelMode = false; _cxpSelected.clear();
+    solicitudesPago = await dbSafe('GET','solicitudes_pago?order=created_at.desc&limit=50',null,'sol_reload');
+    solicitudItems  = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'sol_items_reload');
+    renderPlaneacion();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+function renderSolicitudesPago() {
+  var isDir = currentUser && (currentUser.rol==='director'||currentUser.rol==='admin');
+  var saldoTotal = cuentas.reduce(function(s,c){ return s+(c.saldo_actual||c.saldo_inicial||0); },0);
+  var html = '';
+
+  if(!solicitudesPago.length) {
+    return '<div class="card" style="text-align:center;padding:32px;color:var(--dim)"><div style="font-size:32px;margin-bottom:8px">📋</div>No hay solicitudes de pago aún</div>';
+  }
+
+  solicitudesPago.forEach(function(sol) {
+    var items = solicitudItems.filter(function(si){ return si.solicitud_id===sol.id; });
+    var totalSol = items.reduce(function(s,si){ return s+(si.monto||0); },0);
+    var aprobados = items.filter(function(si){ return si.aprobado===true; }).reduce(function(s,si){ return s+(si.monto||0); },0);
+    var rechazados = items.filter(function(si){ return si.aprobado===false; });
+    var pendItems = items.filter(function(si){ return si.aprobado===null||si.aprobado===undefined; });
+    var pct = saldoTotal>0 ? Math.min(100,Math.round(totalSol/saldoTotal*100)) : 0;
+    var estColor = sol.estatus==='PENDIENTE'?'var(--warn)':sol.estatus==='REVISADA'?'var(--success)':'var(--dim)';
+
+    html += '<div class="card" style="margin-bottom:12px">';
+    // Encabezado
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">';
+    html += '<div>';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text)">'+fmtDate(sol.fecha)+(sol.creado_por?' · <span style="color:var(--dim)">'+sol.creado_por+'</span>':'')+'</div>';
+    if(sol.nota) html += '<div style="font-size:11px;color:var(--accent2);margin-top:3px;background:rgba(77,142,255,.08);border-radius:6px;padding:4px 8px">📝 '+sol.nota+'</div>';
+    html += '</div>';
+    html += '<span style="font-size:10px;background:'+estColor+'22;color:'+estColor+';border-radius:20px;padding:2px 8px;font-weight:700;white-space:nowrap">'+sol.estatus+'</span>';
+    html += '</div>';
+
+    // KPIs saldo vs solicitado (solo director)
+    if(isDir && sol.estatus==='PENDIENTE') {
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
+      html += '<div style="background:rgba(0,209,140,.06);border:1px solid rgba(0,209,140,.15);border-radius:8px;padding:8px 10px"><div style="font-size:9px;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:2px">Saldo disponible</div><div style="font-size:13px;font-weight:800;color:var(--success)">'+fmt(saldoTotal)+'</div></div>';
+      html += '<div style="background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.15);border-radius:8px;padding:8px 10px"><div style="font-size:9px;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:2px">Total solicitado</div><div style="font-size:13px;font-weight:800;color:var(--danger)">'+fmt(totalSol)+'</div></div>';
+      html += '</div>';
+      html += '<div style="margin-bottom:6px"><div style="font-size:10px;color:var(--dim);margin-bottom:3px">Solicitado vs saldo disponible</div>';
+      var barColor = pct>100?'var(--danger)':pct>70?'var(--warn)':'var(--accent)';
+      html += '<div style="background:var(--surface);border-radius:4px;height:6px"><div style="background:'+barColor+';height:6px;border-radius:4px;width:'+Math.min(pct,100)+'%;transition:width .4s"></div></div>';
+      html += '<div style="font-size:10px;color:'+barColor+';font-weight:700;text-align:right;margin-top:2px">'+pct+'% del saldo</div></div>';
+    }
+
+    // Lista de items
+    items.forEach(function(si, idx) {
+      var aprobBg = si.aprobado===true?'rgba(0,209,140,.06)':si.aprobado===false?'rgba(255,77,106,.06)':'';
+      var bdr = idx<items.length-1?'border-bottom:1px solid var(--border)':'';
+      html += '<div style="padding:8px 0;'+bdr+';background:'+aprobBg+'">';
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+      // Prioridad + reordenar (solo director en pendientes)
+      if(isDir && sol.estatus==='PENDIENTE') {
+        html += '<div style="display:flex;flex-direction:column;gap:1px">';
+        if(idx>0)          html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'arriba\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▲</button>';
+        if(idx<items.length-1) html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'abajo\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▼</button>';
+        html += '</div>';
+      }
+      html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 6px;color:var(--dim)">#'+(idx+1)+'</span>';
+      html += '<span style="font-size:13px;font-weight:700;flex:1">'+(si.proveedor||'—')+'</span>';
+      html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:14px;font-weight:800;color:var(--danger)">'+fmt(si.monto||0)+'</span>';
+      // Botones aprobación (director en pendientes)
+      if(isDir && sol.estatus==='PENDIENTE' && (si.aprobado===null||si.aprobado===undefined)) {
+        html += '<button onclick="aprobarSolItem(\''+si.id+'\',\''+sol.id+'\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(0,209,140,.4);background:rgba(0,209,140,.1);color:var(--success);font-size:11px;font-weight:700;cursor:pointer">✓</button>';
+        html += '<button onclick="rechazarSolItem(\''+si.id+'\',\''+sol.id+'\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(255,77,106,.4);background:rgba(255,77,106,.1);color:var(--danger);font-size:11px;font-weight:700;cursor:pointer">✗</button>';
+      } else if(si.aprobado===true) {
+        html += '<span style="font-size:11px;color:var(--success);font-weight:700">✓ Aprobado</span>';
+      } else if(si.aprobado===false) {
+        html += '<span style="font-size:11px;color:var(--danger);font-weight:700">✗ Rechazado</span>';
+      }
+      html += '</div>';
+      if(si.concepto) html += '<div style="font-size:11px;color:var(--dim);margin-top:2px;padding-left:18px">'+si.concepto+'</div>';
+      if(si.nota_director) html += '<div style="font-size:11px;color:var(--warn);margin-top:2px;padding-left:18px">💬 '+si.nota_director+'</div>';
+      html += '</div>';
+    });
+
+    // Acciones director
+    if(isDir && sol.estatus==='PENDIENTE') {
+      html += '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px">';
+      html += '<div style="font-size:11px;color:var(--dim);flex:1">Aprobado: <strong style="color:var(--success)">'+fmt(aprobados)+'</strong></div>';
+      html += '<button onclick="cerrarSolicitud(\''+sol.id+'\')" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">✓ Marcar revisada</button>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  });
+
+  return html;
+}
+
+async function aprobarSolItem(itemId, solId) {
+  try {
+    await db('PATCH','solicitud_pago_items?id=eq.'+itemId,{aprobado:true});
+    solicitudItems = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_reload');
+    renderPlaneacion();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+async function rechazarSolItem(itemId, solId) {
+  var nota = prompt('Motivo del rechazo (opcional):','');
+  try {
+    await db('PATCH','solicitud_pago_items?id=eq.'+itemId,{aprobado:false, nota_director:nota||null});
+    solicitudItems = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_reload');
+    renderPlaneacion();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+async function moverPrioridad(itemId, solId, dir) {
+  var items = solicitudItems.filter(function(si){ return si.solicitud_id===solId; }).sort(function(a,b){ return (a.prioridad||0)-(b.prioridad||0); });
+  var idx = items.findIndex(function(si){ return si.id===itemId; });
+  if(idx<0) return;
+  var swapIdx = dir==='arriba' ? idx-1 : idx+1;
+  if(swapIdx<0||swapIdx>=items.length) return;
+  var p1 = items[idx].prioridad||idx+1;
+  var p2 = items[swapIdx].prioridad||swapIdx+1;
+  try {
+    await Promise.all([
+      db('PATCH','solicitud_pago_items?id=eq.'+items[idx].id,     {prioridad:p2}),
+      db('PATCH','solicitud_pago_items?id=eq.'+items[swapIdx].id, {prioridad:p1}),
+    ]);
+    solicitudItems = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_reload');
+    renderPlaneacion();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+async function cerrarSolicitud(solId) {
+  try {
+    await db('PATCH','solicitudes_pago?id=eq.'+solId,{estatus:'REVISADA'});
+    showToast('✅ Solicitud marcada como revisada');
+    solicitudesPago = await dbSafe('GET','solicitudes_pago?order=created_at.desc&limit=50',null,'sol_reload');
+    renderPlaneacion();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 function renderPlaneacion() {
   const el = document.getElementById('main-content');
   if(!el) return;
