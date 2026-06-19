@@ -1372,7 +1372,7 @@ async function loadAll() {
 
 // ── Recarga selectiva por módulo activo ─────────────────────────────
 async function recargarModuloActivo() {
-  var GRUPO_PRES = ['dashboard','egresos','ingresos'];
+  var GRUPO_PRES = ['dashboard','egresos','ingresos','cambios'];
   var GRUPO_FISC = ['cfdi','conciliacion','cuentas','reportes'];
   if(GRUPO_PRES.includes(currentTab))      { await loadCatalogos(); await loadControlPresupuestal(); }
   else if(GRUPO_FISC.includes(currentTab)) { await loadCatalogos(); await loadFiscalizacion(); }
@@ -1426,7 +1426,7 @@ function setTab(tab) {
   currentTab = tab;
 
   // Determinar a qué grupo pertenece y mostrar su sub-nav
-  var GRUPO_PRES = ['dashboard','egresos','ingresos'];
+  var GRUPO_PRES = ['dashboard','egresos','ingresos','cambios'];
   var GRUPO_FISC = ['cfdi','conciliacion','cuentas','reportes'];
 
   var subnavP = document.getElementById('subnav-presupuestal');
@@ -1463,7 +1463,7 @@ function setTab(tab) {
 
   // FAB
   var fab = document.getElementById('fab-btn');
-  if(fab) fab.style.display = ['egresos','ingresos','cuentas','cfdi','conciliacion','planeacion'].includes(tab) ? 'flex' : 'none';
+  if(fab) fab.style.display = ['egresos','ingresos','cuentas','cfdi','conciliacion','planeacion','cambios'].includes(tab) ? 'flex' : 'none';
 
   // Render
   var renders = {
@@ -1484,7 +1484,8 @@ function setTab(tab) {
     cfdi:         renderCFDI,
     conciliacion: renderConciliacion,
     reportes:     renderReportes,
-    planeacion:   renderPlaneacion
+    planeacion:   renderPlaneacion,
+    cambios:      renderOrdenesCambio
   };
   if(renders[tab]) renders[tab]();
 }
