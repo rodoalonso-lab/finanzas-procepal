@@ -4166,6 +4166,7 @@ function renderCXPList() {
       html += '<span id="'+expId+'-arrow" style="color:var(--dim);font-size:12px;transition:transform .2s">▼</span>';
       html += '</div>';
       html += '</div>';
+      if(_cxpSelMode && x.estatus!=='PAGADO') html += '</div>'; // cierra el flex de checkbox+row
 
       // Detalle
       html += '<div id="'+expId+'" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border);background:var(--bg)">';
