@@ -4031,6 +4031,33 @@ function renderCXPList() {
     html += '</div>';
   }
 
+  // ── Barra de modo solicitud ──────────────────────────────────────────
+  var cxpEnSol = new Set(solicitudItems.filter(function(si){
+    var sol = solicitudesPago.find(function(s){ return s.id===si.solicitud_id && s.estatus==='PENDIENTE'; });
+    return !!sol;
+  }).map(function(si){ return si.cxp_id; }));
+
+  if(_cxpSelMode) {
+    var totalSel = Array.from(_cxpSelected).reduce(function(s,id){
+      var x = cxpData.find(function(c){ return c.id===id; });
+      return s + (x ? Math.max(0,(x.monto||0)-(x.pagado_parcial||0)) : 0);
+    },0);
+    html += '<div style="background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
+    html += '<div style="color:#a78bfa;font-size:12px;font-weight:700">📋 Modo solicitud — selecciona los pagos a solicitar</div>';
+    html += '<button onclick="cancelarSelMode()" style="border:none;background:none;color:var(--dim);font-size:12px;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid var(--border)">✕ Cancelar</button>';
+    html += '</div>';
+    if(_cxpSelected.size>0) {
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
+      html += '<div><span style="font-weight:700;color:var(--text)">'+_cxpSelected.size+' seleccionados</span> · <span style="color:var(--danger);font-weight:700">'+fmt(totalSel)+'</span></div>';
+      html += '<button onclick="abrirEnviarSolicitud()" style="background:#6366f1;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">📤 Enviar solicitud</button>';
+      html += '</div>';
+    }
+  } else {
+    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
+    html += '<button onclick="activarSelMode()" style="background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);border-radius:8px;padding:7px 12px;color:#a78bfa;font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">📋 Solicitar pagos</button>';
+    html += '</div>';
+  }
+
   // Buscador
   html += '<input id="inp-cxp-busq" type="text" placeholder="Buscar proveedor, concepto..." value="'+(window._cxpBusq||'')+'" oninput="window._cxpBusq=this.value;clearTimeout(window._busqTimer);window._busqTimer=setTimeout(function(){renderPlaneacion();var i=document.getElementById(\'inp-cxp-busq\');if(i){var p=i.value.length;i.focus();i.setSelectionRange(p,p);}},350)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;margin-bottom:8px">';
 
