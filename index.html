@@ -3684,6 +3684,218 @@ function prioColor(p) {
   return p==='ALTA'?'var(--danger)':p==='MEDIA'?'var(--warn)':'var(--success)';
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// MÓDULO: ÓRDENES DE CAMBIO
+// ══════════════════════════════════════════════════════════════════════════
+var _ocFiltroObra = '';
+var _ocFiltroTipo = '';
+var _ocFiltroEst  = '';
+
+function renderOrdenesCambio() {
+  const el = document.getElementById('main-content');
+  if(!el) return;
+
+  const lista = ordenesCambio.filter(function(oc){
+    if(_ocFiltroObra && oc.obra_id !== _ocFiltroObra) return false;
+    if(_ocFiltroTipo && oc.tipo    !== _ocFiltroTipo) return false;
+    if(_ocFiltroEst  && oc.estatus !== _ocFiltroEst)  return false;
+    return true;
+  });
+
+  // KPIs globales
+  const totalAdi = ordenesCambio.filter(o=>o.tipo==='aditiva'&&o.estatus==='APROBADA').reduce((s,o)=>s+(o.monto||0),0);
+  const totalDed = ordenesCambio.filter(o=>o.tipo==='deductiva'&&o.estatus==='APROBADA').reduce((s,o)=>s+(o.monto||0),0);
+
+  const ss = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none';
+
+  let html = '';
+
+  // KPIs
+  html += '<div class="stat-grid" style="margin-bottom:12px">';
+  html += '<div class="stat-box"><div class="stat-label" style="color:var(--success)">Total Aditivas</div><div class="stat-val" style="color:var(--success)">+'+fmt(totalAdi)+'</div></div>';
+  html += '<div class="stat-box"><div class="stat-label" style="color:var(--danger)">Total Deductivas</div><div class="stat-val" style="color:var(--danger)">-'+fmt(totalDed)+'</div></div>';
+  html += '</div>';
+
+  // Filtros
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
+  html += '<select onchange="window._ocFiltroObra=this.value;renderOrdenesCambio()" style="'+ss+';flex:2;min-width:130px">';
+  html += '<option value="">Todas las obras</option>';
+  obras.forEach(function(o){ html += '<option value="'+o.id+'"'+(o.id===_ocFiltroObra?' selected':'')+'>'+o.nombre+'</option>'; });
+  html += '</select>';
+  html += '<select onchange="window._ocFiltroTipo=this.value;renderOrdenesCambio()" style="'+ss+'">';
+  html += '<option value="">Tipo: Todos</option>';
+  html += '<option value="aditiva"'+(_ocFiltroTipo==='aditiva'?' selected':'')+'>▲ Aditiva</option>';
+  html += '<option value="deductiva"'+(_ocFiltroTipo==='deductiva'?' selected':'')+'>▼ Deductiva</option>';
+  html += '</select>';
+  html += '<select onchange="window._ocFiltroEst=this.value;renderOrdenesCambio()" style="'+ss+'">';
+  html += '<option value="">Estatus: Todos</option>';
+  html += ['APROBADA','PENDIENTE','RECHAZADA'].map(function(s){ return '<option value="'+s+'"'+(_ocFiltroEst===s?' selected':'')+'>'+s+'</option>'; }).join('');
+  html += '</select>';
+  html += '</div>';
+
+  if(!lista.length) {
+    html += '<div class="card" style="text-align:center;padding:32px;color:var(--dim)">No hay órdenes de cambio registradas</div>';
+    el.innerHTML = html; return;
+  }
+
+  // Agrupar por obra
+  const porObraOC = {};
+  lista.forEach(function(oc){
+    const obraObj = obras.find(x=>x.id===oc.obra_id);
+    const obraNombre = obraObj ? obraObj.nombre : (oc.obra_id || 'Sin obra');
+    if(!porObraOC[obraNombre]) porObraOC[obraNombre] = [];
+    porObraOC[obraNombre].push(oc);
+  });
+
+  Object.keys(porObraOC).sort().forEach(function(obraNombre){
+    const items = porObraOC[obraNombre];
+    const adiObra = items.filter(x=>x.tipo==='aditiva'&&x.estatus==='APROBADA').reduce((s,x)=>s+(x.monto||0),0);
+    const dedObra = items.filter(x=>x.tipo==='deductiva'&&x.estatus==='APROBADA').reduce((s,x)=>s+(x.monto||0),0);
+    html += '<div class="section-title" style="margin-top:12px">'+obraNombre;
+    if(adiObra>0) html += ' <span style="font-size:10px;color:var(--success);font-weight:600">+'+fmt(adiObra)+'</span>';
+    if(dedObra>0) html += ' <span style="font-size:10px;color:var(--danger);font-weight:600">-'+fmt(dedObra)+'</span>';
+    html += '</div>';
+    html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px">';
+    items.forEach(function(oc, idx){
+      const isAdi   = oc.tipo==='aditiva';
+      const color   = oc.estatus==='RECHAZADA'?'var(--dim)':isAdi?'var(--success)':'var(--danger)';
+      const sign    = isAdi?'▲ +':'▼ -';
+      const estBg   = oc.estatus==='APROBADA'?'rgba(0,209,140,.1)':oc.estatus==='PENDIENTE'?'rgba(255,193,7,.1)':'rgba(255,77,106,.1)';
+      const estCol  = oc.estatus==='APROBADA'?'var(--success)':oc.estatus==='PENDIENTE'?'var(--warn)':'var(--danger)';
+      const bdr     = idx<items.length-1?'border-bottom:1px solid var(--border)':'';
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;'+bdr+'">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+      if(oc.numero_oc) html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 6px">'+oc.numero_oc+'</span>';
+      html += '<span style="font-size:13px;font-weight:700">'+(oc.concepto||'—')+'</span>';
+      html += '<span style="font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;background:'+estBg+';color:'+estCol+'">'+oc.estatus+'</span>';
+      html += '</div>';
+      if(oc.fecha) html += '<div style="font-size:10px;color:var(--dim);margin-top:2px">'+fmtDate(oc.fecha)+'</div>';
+      if(oc.observaciones) html += '<div style="font-size:11px;color:var(--dim);margin-top:2px">'+oc.observaciones+'</div>';
+      html += '</div>';
+      html += '<div style="text-align:right;flex-shrink:0">';
+      html += '<div style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:'+color+'">'+sign+fmt(oc.monto||0)+'</div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:4px;flex-shrink:0">';
+      html += '<button onclick="openEditOC(\''+oc.id+'\')" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer">✏️</button>';
+      html += '<button onclick="deleteOC(\''+oc.id+'\')" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+function openNewOC() {
+  const obraOpts = obras.map(function(o){ return '<option value="'+o.id+'">'+o.nombre+'</option>'; }).join('');
+  const hoy = new Date().toISOString().slice(0,10);
+  openSheet('oc', `
+    <h3 style="margin:0 0 16px;font-size:16px">Nueva Orden de Cambio</h3>
+    <div class="form-group"><label class="form-label">Obra *</label>
+      <select class="form-input" id="oc-obra"><option value="">— Seleccionar —</option>${obraOpts}</select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">Tipo *</label>
+        <select class="form-input" id="oc-tipo">
+          <option value="aditiva">▲ Aditiva (suma al presupuesto)</option>
+          <option value="deductiva">▼ Deductiva (resta al presupuesto)</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">No. OC</label>
+        <input class="form-input" id="oc-numero" placeholder="OC-001"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Concepto *</label>
+      <input class="form-input" id="oc-concepto" placeholder="Descripción del cambio"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">Monto *</label>
+        <input class="form-input" id="oc-monto" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Fecha</label>
+        <input class="form-input" id="oc-fecha" type="date" value="${hoy}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Estatus</label>
+      <select class="form-input" id="oc-estatus">
+        <option value="APROBADA">APROBADA</option>
+        <option value="PENDIENTE">PENDIENTE</option>
+        <option value="RECHAZADA">RECHAZADA</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Observaciones</label>
+      <textarea class="form-input" id="oc-obs" rows="2" placeholder="Notas adicionales..."></textarea></div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveOC(null)">Guardar Orden de Cambio</button>
+  `);
+}
+
+function openEditOC(id) {
+  const oc = ordenesCambio.find(function(x){ return x.id===id; });
+  if(!oc) return;
+  const obraOpts = obras.map(function(o){ return '<option value="'+o.id+'"'+(o.id===oc.obra_id?' selected':'')+'>'+o.nombre+'</option>'; }).join('');
+  openSheet('oc', `
+    <h3 style="margin:0 0 16px;font-size:16px">Editar Orden de Cambio</h3>
+    <div class="form-group"><label class="form-label">Obra *</label>
+      <select class="form-input" id="oc-obra"><option value="">— Seleccionar —</option>${obraOpts}</select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">Tipo *</label>
+        <select class="form-input" id="oc-tipo">
+          <option value="aditiva"${oc.tipo==='aditiva'?' selected':''}>▲ Aditiva</option>
+          <option value="deductiva"${oc.tipo==='deductiva'?' selected':''}>▼ Deductiva</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">No. OC</label>
+        <input class="form-input" id="oc-numero" value="${oc.numero_oc||''}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Concepto *</label>
+      <input class="form-input" id="oc-concepto" value="${oc.concepto||''}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">Monto *</label>
+        <input class="form-input" id="oc-monto" type="number" min="0" step="0.01" value="${oc.monto||0}"></div>
+      <div class="form-group"><label class="form-label">Fecha</label>
+        <input class="form-input" id="oc-fecha" type="date" value="${oc.fecha||''}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Estatus</label>
+      <select class="form-input" id="oc-estatus">
+        <option value="APROBADA"${oc.estatus==='APROBADA'?' selected':''}>APROBADA</option>
+        <option value="PENDIENTE"${oc.estatus==='PENDIENTE'?' selected':''}>PENDIENTE</option>
+        <option value="RECHAZADA"${oc.estatus==='RECHAZADA'?' selected':''}>RECHAZADA</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Observaciones</label>
+      <textarea class="form-input" id="oc-obs" rows="2">${oc.observaciones||''}</textarea></div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveOC('${id}')">Actualizar</button>
+  `);
+}
+
+async function saveOC(id) {
+  const obra_id   = document.getElementById('oc-obra').value;
+  const tipo      = document.getElementById('oc-tipo').value;
+  const concepto  = document.getElementById('oc-concepto').value.trim();
+  const monto     = parseFloat(document.getElementById('oc-monto').value)||0;
+  const fecha     = document.getElementById('oc-fecha').value;
+  const estatus   = document.getElementById('oc-estatus').value;
+  const numero_oc = document.getElementById('oc-numero').value.trim();
+  const obs       = document.getElementById('oc-obs').value.trim();
+  if(!obra_id || !concepto || monto<=0) { showToast('⚠️ Obra, concepto y monto son requeridos','warn'); return; }
+  const body = {obra_id, tipo, concepto, monto, fecha:fecha||null, estatus, numero_oc:numero_oc||null, observaciones:obs||null};
+  try {
+    if(id) await db('PATCH', 'ordenes_cambio?id=eq.'+id, body);
+    else   await db('POST',  'ordenes_cambio', body);
+    showToast('✅ Orden de cambio guardada');
+    closeSheet('oc');
+    ordenesCambio = await dbSafe('GET','ordenes_cambio?order=fecha.desc',null,'oc_reload');
+    renderOrdenesCambio();
+    // También recargar dashboard para actualizar presupuesto ajustado
+    await loadControlPresupuestal();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+async function deleteOC(id) {
+  if(!confirm('¿Eliminar esta orden de cambio?')) return;
+  try {
+    await db('DELETE','ordenes_cambio?id=eq.'+id);
+    showToast('Eliminado');
+    ordenesCambio = await dbSafe('GET','ordenes_cambio?order=fecha.desc',null,'oc_reload');
+    renderOrdenesCambio();
+    await loadControlPresupuestal();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 function renderPlaneacion() {
   const el = document.getElementById('main-content');
   if(!el) return;
