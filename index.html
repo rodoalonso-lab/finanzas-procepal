@@ -3957,9 +3957,12 @@ function renderPlaneacion() {
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
   html += '<div class="plan-tabs" style="border:none;margin-bottom:0;flex:1">';
   // Capturista: solo ve sub-tab CxP
+  var solPend = solicitudesPago.filter(function(s){ return s.estatus==='PENDIENTE'; }).length;
+  var solBadge = solPend>0 ? ' 🔔'+solPend : '';
+  var isDirector = currentUser && (currentUser.rol==='director'||currentUser.rol==='admin');
   var tabs = esCapturista
-    ? [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')']]
-    : [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcPendientes+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección']];
+    ? [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['solicitudes','📋 Mis Solicitudes'+(solBadge)]]
+    : [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcPendientes+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección'],['solicitudes','📋 Solicitudes'+(solBadge)]];
   // Forzar sub-tab CxP si capturista intenta navegar a otro
   if(esCapturista && _planTab !== 'cxp') _planTab = 'cxp';
   tabs.forEach(function(t) {
@@ -3973,6 +3976,7 @@ function renderPlaneacion() {
   if(_planTab==='cxp')             html += renderCXPList();
   else if(_planTab==='cxc')        html += renderCXCList();
   else if(_planTab==='deuda')      html += renderDeudaList();
+  else if(_planTab==='solicitudes') html += renderSolicitudesPago();
   else                              html += renderProyeccion();
 
   el.innerHTML = html;
