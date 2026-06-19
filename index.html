@@ -3809,7 +3809,8 @@ function renderOrdenesCambio() {
 function openNewOC() {
   const obraOpts = obras.map(function(o){ return '<option value="'+o.id+'">'+o.nombre+'</option>'; }).join('');
   const hoy = new Date().toISOString().slice(0,10);
-  openSheet('oc', `
+  document.getElementById('sheet-oc-title').textContent = 'Nueva Orden de Cambio';
+  openDynSheet('oc', `
     <h3 style="margin:0 0 16px;font-size:16px">Nueva Orden de Cambio</h3>
     <div class="form-group"><label class="form-label">Obra *</label>
       <select class="form-input" id="oc-obra"><option value="">— Seleccionar —</option>${obraOpts}</select></div>
@@ -3846,7 +3847,8 @@ function openEditOC(id) {
   const oc = ordenesCambio.find(function(x){ return x.id===id; });
   if(!oc) return;
   const obraOpts = obras.map(function(o){ return '<option value="'+o.id+'"'+(o.id===oc.obra_id?' selected':'')+'>'+o.nombre+'</option>'; }).join('');
-  openSheet('oc', `
+  document.getElementById('sheet-oc-title').textContent = 'Editar Orden de Cambio';
+  openDynSheet('oc', `
     <h3 style="margin:0 0 16px;font-size:16px">Editar Orden de Cambio</h3>
     <div class="form-group"><label class="form-label">Obra *</label>
       <select class="form-input" id="oc-obra"><option value="">— Seleccionar —</option>${obraOpts}</select></div>
