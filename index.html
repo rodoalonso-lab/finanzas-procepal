@@ -1086,6 +1086,20 @@ body.tema-claro .sub-nav{background:#FFFFFF}
 
 <div class="toast" id="toast"></div>
 
+<!-- Sheet: Orden de Cambio -->
+<div class="sheet-overlay" id="sheet-oc">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title" id="sheet-oc-title">Orden de Cambio</div>
+        <button class="sheet-close" onclick="closeSheet('oc')">✕</button>
+      </div>
+    </div>
+    <div id="dynsheet-oc-body"></div>
+  </div>
+</div>
+
 <!-- Librería compartida Procepal: SUPABASE_URL/KEY, db(), getToken(), fmt(), fmtDate(), showToast(), uploadStorage() -->
 <script src="https://rodoalonso-lab.github.io/metaltek/procepal-lib.js"></script>
 <script>
