@@ -3884,7 +3884,7 @@ function renderCXPList() {
         html += '<button onclick="abrirPagoParcialCXP(\''+x.id+'\')" style="flex:2;padding:8px;border-radius:8px;border:1px solid var(--accent)44;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">💰 Pago parcial</button>';
         html += '<button onclick="marcarPagadoCXP(\''+x.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--success)44;background:rgba(0,209,140,.08);color:var(--success);font-size:11px;font-weight:700;cursor:pointer;font-family:Space Grotesk,sans-serif">✓ Total</button>';
         html += '<button onclick="openEditCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer" title="Editar">✏️</button>';
-        if(isAdmin) html += '<button onclick="deleteCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer" title="Eliminar">🗑</button>';
+        html += '<button onclick="deleteCXP(\''+x.id+'\')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer" title="Eliminar">🗑</button>';
         html += '</div>';
       }
       html += '</div>';
