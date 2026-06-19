@@ -1541,7 +1541,7 @@ function renderDashboard() {
 
   // Primero inicializar todas las obras con presupuesto
   obras.forEach(function(o) {
-    porObra[o.id] = {nombre: o.nombre, pres: o.presupuesto||0, egr: 0, ing: 0};
+    porObra[o.id] = {nombre: o.nombre, pres: o.presupuesto||0, egr: 0, ing: 0, oc_adi: 0, oc_ded: 0};
   });
 
   // Egresos desde requisiciones autorizadas de MetalTek
@@ -1549,7 +1549,7 @@ function renderDashboard() {
     if(!r.obra_id) return;
     if(!porObra[r.obra_id]) {
       const o = obras.find(x=>x.id===r.obra_id);
-      porObra[r.obra_id] = {nombre: o?o.nombre:r.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
+      porObra[r.obra_id] = {nombre: o?o.nombre:r.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
     }
     porObra[r.obra_id].egr += parseFloat(r.monto_cotizado)||0;
   });
@@ -1558,7 +1558,7 @@ function renderDashboard() {
   egresosManualData.filter(function(m){return m.obra_id;}).forEach(function(m) {
     if(!porObra[m.obra_id]) {
       const o = obras.find(x=>x.id===m.obra_id);
-      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
+      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
     }
     porObra[m.obra_id].egr += (m.monto||0);
   });
@@ -1567,9 +1567,19 @@ function renderDashboard() {
   ingresos.filter(m=>m.obra_id).forEach(function(m) {
     if(!porObra[m.obra_id]) {
       const o = obras.find(x=>x.id===m.obra_id);
-      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0};
+      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
     }
     porObra[m.obra_id].ing += (m.monto||0);
+  });
+
+  // Órdenes de cambio APROBADAS por obra
+  ordenesCambio.filter(function(oc){ return oc.obra_id && oc.estatus==='APROBADA'; }).forEach(function(oc) {
+    if(!porObra[oc.obra_id]) {
+      const o = obras.find(x=>x.id===oc.obra_id);
+      porObra[oc.obra_id] = {nombre: o?o.nombre:oc.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
+    }
+    if(oc.tipo==='aditiva') porObra[oc.obra_id].oc_adi += (oc.monto||0);
+    else                    porObra[oc.obra_id].oc_ded += (oc.monto||0);
   });
 
   const mesLabel = hoy.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
