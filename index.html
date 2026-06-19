@@ -1215,7 +1215,7 @@ async function doRefresh() {
   if(btn) btn.classList.add('spinning');
   try {
     await loadAll();
-    renderVista();
+    setTab(currentTab);
     showToast('✓ Datos actualizados');
   } catch(e){
     showToast('Error al actualizar', true);
