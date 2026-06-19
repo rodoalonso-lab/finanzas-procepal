@@ -1108,6 +1108,10 @@ let currentUser = null;
 let currentTab = 'dashboard';
 let movimientos = [], cuentas = [], obras = [], cfdiEmitidos = [], cfdiRecibidos = [], cfdiParsed = [];
 let ordenesCambio = [];
+let solicitudesPago = [];
+let solicitudItems  = [];
+let _cxpSelMode     = false;
+let _cxpSelected    = new Set();
 // CFDI Nómina
 let cfdiNominaCache = {};   // uuid_sat → parsed nomina data
 let cfdiNominaFilter = { trabajadores: null, semanas: null }; // null=todos, []=ninguno, [x,y]=selección
