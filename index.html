@@ -1126,6 +1126,10 @@ async function supaAuth(email, pass) {
 // fmt, fmtDate, showToast → de procepal-lib.js
 function openSheet(id){ document.getElementById('sheet-'+id).classList.add('open'); }
 function closeSheet(id){ document.getElementById('sheet-'+id).classList.remove('open'); }
+function openDynSheet(id, html) {
+  document.getElementById('dynsheet-'+id+'-body').innerHTML = html;
+  document.getElementById('sheet-'+id).classList.add('open');
+}
 
 const CATS_EGRESO = ['Materiales','Mano de obra','Subcontrato','Equipo y herramienta','Transporte','Combustible','Nómina','Servicios','Impuestos y honorarios','Gastos generales','Otro'];
 const CATS_INGRESO = ['Anticipo','Estimación','Liquidación','Finiquito','Devolución FG','Otro'];
