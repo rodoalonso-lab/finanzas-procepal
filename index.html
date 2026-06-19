@@ -1370,15 +1370,19 @@ async function loadFiscalizacion() {
 // IMPORTANTE: pagos en Planeación NO generan movimientos en Control Presupuestal
 async function loadPlaneacion() {
   const lim = PAGE_LIMITS;
-  const [_cxp, _cxc, _deuda] = await Promise.all([
+  const [_cxp, _cxc, _deuda, _sols, _solItems] = await Promise.all([
     dbSafe('GET', 'cuentas_por_pagar?order=fecha_vencimiento.asc&limit='  + lim.cuentas_por_pagar,  null, 'cxp'),
     dbSafe('GET', 'cuentas_por_cobrar?order=fecha_vencimiento.asc&limit=' + lim.cuentas_por_cobrar, null, 'cxc'),
     dbSafe('GET', 'deuda_financiera?order=created_at.desc&limit='         + lim.deuda_financiera,   null, 'deuda'),
+    dbSafe('GET', 'solicitudes_pago?order=created_at.desc&limit=50',                                null, 'solicitudes_pago'),
+    dbSafe('GET', 'solicitud_pago_items?order=prioridad.asc',                                       null, 'solicitud_items'),
   ]);
-  cxpData   = _cxp;
-  cxcData   = _cxc;
-  deudaData = _deuda;
-  console.log('[Planeación] CxP:' + cxpData.length + ' CxC:' + cxcData.length + ' Deuda:' + deudaData.length);
+  cxpData        = _cxp;
+  cxcData        = _cxc;
+  deudaData      = _deuda;
+  solicitudesPago = _sols;
+  solicitudItems  = _solItems;
+  console.log('[Planeación] CxP:' + cxpData.length + ' CxC:' + cxcData.length + ' Deuda:' + deudaData.length + ' Solicitudes:' + solicitudesPago.length);
 }
 
 // ── loadAll: carga inicial completa ─────────────────────────────────
