@@ -576,6 +576,7 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     <button class="sub-tab" onclick="setTab('dashboard')" id="tab-dashboard">📈 Resumen</button>
     <button class="sub-tab" onclick="setTab('egresos')" id="tab-egresos">📤 Egresos</button>
     <button class="sub-tab" onclick="setTab('ingresos')" id="tab-ingresos">📥 Ingresos</button>
+    <button class="sub-tab" onclick="setTab('cambios')" id="tab-cambios">🔄 Órdenes de Cambio</button>
   </div>
   <!-- SUB-NAV: Fiscalización -->
   <div class="sub-nav" id="subnav-fiscalizacion" style="display:none">
@@ -1300,7 +1301,7 @@ async function loadCatalogos() {
 //          movimientos (Finanzas — solo ingresos manuales)
 async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_movIng, _movEgr, _requis] = await Promise.all([
+  const [_movIng, _movEgr, _requis, _oc] = await Promise.all([
     dbSafe('GET',
       'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
       null, 'movimientos_ingreso'),
@@ -1311,10 +1312,12 @@ async function loadControlPresupuestal() {
     dbSafe('GET',
       'requisiciones?estado=eq.autorizada&order=fecha.desc&limit=' + lim.requisiciones,
       null, 'requisiciones'),
+    dbSafe('GET', 'ordenes_cambio?order=fecha.desc', null, 'ordenes_cambio'),
   ]);
   movimientos       = _movIng;
   egresosManualData = _movEgr;
   requisicionesData = _requis;
+  ordenesCambio     = _oc;
   console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas');
 }
 
