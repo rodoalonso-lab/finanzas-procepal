@@ -4018,6 +4018,8 @@ function renderSolicitudesPago() {
     var pendItems = items.filter(function(si){ return si.aprobado===null||si.aprobado===undefined; });
     var pct = saldoTotal>0 ? Math.min(100,Math.round(totalSol/saldoTotal*100)) : 0;
     var estColor = sol.estatus==='PENDIENTE'?'var(--warn)':sol.estatus==='REVISADA'?'var(--success)':'var(--dim)';
+    var esCreador = currentUser && sol.creado_por === currentUser.nombre;
+    var puedeReordenar = sol.estatus==='PENDIENTE' && (isDir || esCreador);
 
     html += '<div class="card" style="margin-bottom:12px">';
     // Encabezado
