@@ -4069,7 +4069,7 @@ function renderSolicitudesPago() {
 
     // Lista de items
     items.forEach(function(si, idx) {
-      var montoAut  = si.monto_autorizado != null ? si.monto_autorizado : (si.monto||0);
+      var montoAut  = si._montoEditado != null ? si._montoEditado : (si.monto_autorizado != null ? si.monto_autorizado : (si.monto||0));
       var aplicado  = sol.estatus!=='PENDIENTE';
       var bdr = idx<items.length-1?'border-bottom:1px solid var(--border)':'';
       html += '<div style="padding:10px 0;'+bdr+'">';
