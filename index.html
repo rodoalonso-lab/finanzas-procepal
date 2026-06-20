@@ -4362,10 +4362,21 @@ async function checkNotificaciones() {
       }
     });
 
-    // Actualizar badge y badge de sub-tab
+    // Actualizar badge
     actualizarBadgeNotif();
-    // Si está en la vista de solicitudes, re-renderizar
-    if(currentTab === 'planeacion' && _planTab === 'solicitudes') renderPlaneacion();
+    // Re-renderizar solicitudes solo si el director NO está editando montos
+    if(currentTab === 'planeacion' && _planTab === 'solicitudes') {
+      var hayInputActivo = document.activeElement && document.activeElement.id && document.activeElement.id.startsWith('aut-');
+      if(!hayInputActivo) {
+        // Preservar montos ya escritos en memoria antes de re-renderizar
+        document.querySelectorAll('input[id^="aut-"]').forEach(function(inp) {
+          var itemId = inp.id.replace('aut-', '');
+          var item = solicitudItems.find(function(si){ return String(si.id) === itemId; });
+          if(item) item._montoEditado = parseFloat(inp.value);
+        });
+        renderPlaneacion();
+      }
+    }
 
   } catch(e){ console.warn('[Notif]', e); }
 }
