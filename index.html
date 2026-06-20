@@ -4093,10 +4093,8 @@ function renderSolicitudesPago() {
 
     // Totales y botón aplicar (director, pendiente)
     if(isDir && sol.estatus==='PENDIENTE') {
-      var totalAutInic = items.reduce(function(s,si){ return s+(si.monto_autorizado!=null?si.monto_autorizado:(si.monto||0)); },0);
       html += '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
-      html += '<div style="font-size:12px;color:var(--dim)">Total a pagar: <strong id="total-aut-'+sol.id+'" style="color:var(--success);font-size:14px">'+fmt(totalAutInic)+'</strong></div>';
+      html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">';
       html += '<button onclick="aplicarPagosSolicitud(\''+sol.id+'\')" style="background:var(--success);border:none;border-radius:8px;padding:9px 18px;color:#070B14;font-size:12px;font-weight:800;cursor:pointer;font-family:Space Grotesk,sans-serif">💸 Aplicar pagos y cerrar</button>';
       html += '</div></div>';
     } else if(sol.estatus==='REVISADA') {
