@@ -1235,7 +1235,7 @@ async function doLogin() {
   }
 }
 
-function doLogout(){ localStorage.removeItem('fin_session'); currentUser=null; location.reload(); }
+function doLogout(){ logoutSW(); localStorage.removeItem('fin_session'); currentUser=null; location.reload(); }
 
 async function doRefresh() {
   const btn = document.getElementById('refresh-btn');
@@ -4209,6 +4209,44 @@ async function moverPrioridad(itemId, solId, dir) {
     solicitudItems = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_reload');
     renderPlaneacion();
   } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
+// ── SERVICE WORKER ───────────────────────────────────────────────────────
+var _swReg = null;
+
+async function enviarAuthASW() {
+  if (!_swReg || !currentUser) return;
+  try {
+    const jwt = await getValidToken();
+    _swReg.active && _swReg.active.postMessage({
+      type: 'AUTH',
+      jwt:  jwt,
+      user: { nombre: currentUser.nombre, rol: currentUser.rol }
+    });
+  } catch(e) {}
+}
+
+async function registrarSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    _swReg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    // Esperar a que esté activo
+    await navigator.serviceWorker.ready;
+    // Enviar credenciales al SW
+    await enviarAuthASW();
+    // Refrescar JWT en el SW cada 50 minutos (expira en 60)
+    setInterval(enviarAuthASW, 50 * 60 * 1000);
+    // Ping cada 30s para mantenerlo vivo mientras la pestaña está abierta
+    setInterval(function() {
+      _swReg.active && _swReg.active.postMessage({ type: 'PING' });
+    }, 30000);
+  } catch(e) {
+    console.warn('[SW registro]', e);
+  }
+}
+
+function logoutSW() {
+  if (_swReg && _swReg.active) _swReg.active.postMessage({ type: 'LOGOUT' });
 }
 
 // ── NOTIFICACIONES ───────────────────────────────────────────────────────
