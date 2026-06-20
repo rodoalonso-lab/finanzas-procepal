@@ -4104,6 +4104,17 @@ function renderSolicitudesPago() {
         // Vista resumen post-aprobación
         if((si.monto_autorizado||0)>0) {
           html += '<div style="padding-left:18px;font-size:11px;color:var(--success);font-weight:700">✓ Pagado: '+fmt(si.monto_autorizado)+'</div>';
+        } else if(isDir && sol.estatus==='REVISADA' && si.cxp_id) {
+          // Director puede aplicar pago pendiente directamente
+          var saldoPend = (function(){
+            var c = cxpData.find(function(cc){ return cc.id===si.cxp_id; });
+            return c ? Math.max(0,(c.monto||0)-(c.pagado_parcial||0)) : (si.monto||0);
+          })();
+          html += '<div style="padding-left:18px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">';
+          html += '<span style="font-size:11px;color:var(--dim)">— Pendiente</span>';
+          html += '<input type="number" id="pago-pend-'+si.id+'" value="'+saldoPend+'" min="0" step="0.01" style="width:130px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none">';
+          html += '<button onclick="aplicarPagoItemPendiente(\''+si.id+'\',\''+si.cxp_id+'\',\''+sol.id+'\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(0,209,140,.4);background:rgba(0,209,140,.1);color:var(--success);font-size:11px;cursor:pointer;font-weight:700">💰 Aplicar</button>';
+          html += '</div>';
         } else {
           html += '<div style="padding-left:18px;font-size:11px;color:var(--dim)">— No aplicado</div>';
         }
