@@ -4137,6 +4137,15 @@ function actualizarTotalAutSol(solId) {
   },0);
   var el = document.getElementById('total-aut-'+solId);
   if(el) el.textContent = fmt(total);
+  // Actualizar banner global
+  var globalEl = document.getElementById('total-global-aut');
+  if(globalEl) {
+    var totalGlobal = 0;
+    document.querySelectorAll('input[id^="aut-"]').forEach(function(inp){
+      totalGlobal += parseFloat(inp.value)||0;
+    });
+    globalEl.textContent = fmt(totalGlobal);
+  }
 }
 
 async function aplicarPagosSolicitud(solId) {
