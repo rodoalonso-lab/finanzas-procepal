@@ -4390,6 +4390,11 @@ function renderCXPList() {
 
   // Filtrar
   var itemsAll = cxpData.filter(function(x) {
+    // Capturistas solo ven las CxP asignadas a ellos
+    if(_esCapturista && currentUser && currentUser.nombre) {
+      var miNombre = currentUser.nombre.trim().toUpperCase();
+      if((x.gestion||'').trim().toUpperCase() !== miNombre) return false;
+    }
     if(filtroBusq && !(x.proveedor||'').toLowerCase().includes(filtroBusq) && !(x.concepto||'').toLowerCase().includes(filtroBusq) && !(x.observaciones||'').toLowerCase().includes(filtroBusq)) return false;
     if(filtroRazon    && (x.razon||'')!==filtroRazon)        return false;
     if(filtroProyecto && (x.obra_nombre||'')!==filtroProyecto) return false;
