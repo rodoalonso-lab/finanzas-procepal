@@ -4348,7 +4348,7 @@ function renderPlaneacion() {
     ? [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['solicitudes','📋 Mis Solicitudes'+(solBadge)]]
     : [['cxp','📤 x Pagar ('+cxpData.filter(function(x){return x.estatus!=='PAGADO';}).length+')'],['cxc','📥 x Cobrar ('+cxcPendientes+')'],['deuda','🏦 Deuda ('+deudaData.length+')'],['proyeccion','🔮 Proyección'],['solicitudes','📋 Solicitudes'+(solBadge)]];
   // Forzar sub-tab CxP si capturista intenta navegar a otro
-  if(esCapturista && _planTab !== 'cxp') _planTab = 'cxp';
+  if(esCapturista && _planTab !== 'cxp' && _planTab !== 'solicitudes') _planTab = 'cxp';
   tabs.forEach(function(t) {
     html += '<button class="plan-tab'+(_planTab===t[0]?' active':'')+'" onclick="setPlanTab(\''+t[0]+'\')">'+t[1]+'</button>';
   });
