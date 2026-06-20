@@ -6072,12 +6072,12 @@ if('serviceWorker' in navigator){
      PANEL DE CLAUDE AI — Asistente financiero Procepal
      ═══════════════════════════════════════════════════ -->
 <button id="claude-fab" onclick="claudeToggle()" title="Consultar a Claude"
-  style="position:fixed;bottom:24px;left:24px;width:56px;height:56px;border-radius:50%;
+  style="position:fixed;top:10px;left:50%;transform:translateX(-50%);width:52px;height:52px;border-radius:50%;
          background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;
-         font-size:24px;cursor:pointer;box-shadow:0 4px 16px rgba(99,102,241,0.5);
+         font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(99,102,241,0.5);
          z-index:9998;display:flex;align-items:center;justify-content:center;
-         transition:transform 0.2s;"
-  onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">&#x1F916;</button>
+         transition:box-shadow 0.2s;"
+  onmouseover="this.style.boxShadow='0 4px 24px rgba(99,102,241,0.8)'" onmouseout="this.style.boxShadow='0 4px 16px rgba(99,102,241,0.5)'">&#x1F916;</button>
 
 <div id="claude-panel" style="display:none;position:fixed;bottom:90px;left:24px;width:380px;
      background:#1e1e2e;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:9999;
