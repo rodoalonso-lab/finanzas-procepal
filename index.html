@@ -4083,21 +4083,63 @@ function renderSolicitudesPago() {
   return html;
 }
 
-async function aprobarSolItem(itemId, solId) {
-  try {
-    await db('PATCH','solicitud_pago_items?id=eq.'+itemId,{aprobado:true});
-    solicitudItems = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_reload');
-    renderPlaneacion();
-  } catch(e) { showToast('Error: '+e.message,'error'); }
+function setMontoAut(itemId, valor) {
+  var inp = document.getElementById('aut-'+itemId);
+  if(inp) { inp.value = valor; inp.dispatchEvent(new Event('input')); }
 }
 
-async function rechazarSolItem(itemId, solId) {
-  var nota = prompt('Motivo del rechazo (opcional):','');
+function actualizarTotalAutSol(solId) {
+  var items = solicitudItems.filter(function(si){ return si.solicitud_id===solId; });
+  var total = items.reduce(function(s,si){
+    var inp = document.getElementById('aut-'+si.id);
+    return s + (inp ? (parseFloat(inp.value)||0) : (si.monto_autorizado!=null?si.monto_autorizado:(si.monto||0)));
+  },0);
+  var el = document.getElementById('total-aut-'+solId);
+  if(el) el.textContent = fmt(total);
+}
+
+async function aplicarPagosSolicitud(solId) {
+  var items = solicitudItems.filter(function(si){ return si.solicitud_id===solId; });
+  if(!items.length) return;
+  if(!confirm('¿Aplicar los pagos autorizados a las CxP? Esta acción no se puede deshacer.')) return;
   try {
-    await db('PATCH','solicitud_pago_items?id=eq.'+itemId,{aprobado:false, nota_director:nota||null});
-    solicitudItems = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_reload');
+    showToast('Aplicando pagos...');
+    var ops = items.map(function(si){
+      var inp = document.getElementById('aut-'+si.id);
+      var montoAut = inp ? (parseFloat(inp.value)||0) : (si.monto_autorizado||0);
+      return { id: si.id, cxp_id: si.cxp_id, monto_autorizado: montoAut };
+    });
+    // Guardar montos autorizados en los items
+    await Promise.all(ops.map(function(op){
+      return db('PATCH','solicitud_pago_items?id=eq.'+op.id,{monto_autorizado:op.monto_autorizado, aprobado: op.monto_autorizado>0});
+    }));
+    // Aplicar abonos a las CxP
+    var pagosAplicar = ops.filter(function(op){ return op.monto_autorizado>0 && op.cxp_id; });
+    for(var i=0; i<pagosAplicar.length; i++) {
+      var op = pagosAplicar[i];
+      var cxp = cxpData.find(function(c){ return c.id===op.cxp_id; });
+      if(!cxp) {
+        // Recargar si no está en cache
+        var res = await dbSafe('GET','cuentas_por_pagar?id=eq.'+op.cxp_id,null,'cxp_single');
+        cxp = res[0];
+      }
+      if(!cxp) continue;
+      var pagadoActual  = parseFloat(cxp.pagado_parcial)||0;
+      var nuevoPagado   = pagadoActual + op.monto_autorizado;
+      var montoTotal    = parseFloat(cxp.monto)||0;
+      var nuevoEstatus  = nuevoPagado >= montoTotal ? 'PAGADO' : cxp.estatus;
+      await db('PATCH','cuentas_por_pagar?id=eq.'+op.cxp_id,{
+        pagado_parcial: nuevoPagado,
+        estatus: nuevoEstatus
+      });
+    }
+    // Cerrar solicitud
+    await db('PATCH','solicitudes_pago?id=eq.'+solId,{estatus:'REVISADA'});
+    showToast('✅ '+pagosAplicar.length+' pagos aplicados correctamente');
+    // Recargar datos
+    await loadPlaneacion();
     renderPlaneacion();
-  } catch(e) { showToast('Error: '+e.message,'error'); }
+  } catch(e) { showToast('Error: '+e.message,'error'); console.error(e); }
 }
 
 async function moverPrioridad(itemId, solId, dir) {
