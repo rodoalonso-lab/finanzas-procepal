@@ -3993,11 +3993,24 @@ function renderSolicitudesPago() {
   var saldoTotal = cuentas.reduce(function(s,c){ return s+(c.saldo_actual||c.saldo_inicial||0); },0);
   var html = '';
 
-  if(!solicitudesPago.length) {
-    return '<div class="card" style="text-align:center;padding:32px;color:var(--dim)"><div style="font-size:32px;margin-bottom:8px">📋</div>No hay solicitudes de pago aún</div>';
+  // Filtrar por usuario si no es director
+  var listaSols = isDir
+    ? solicitudesPago
+    : solicitudesPago.filter(function(s){ return s.creado_por === currentUser.nombre; });
+
+  if(!listaSols.length) {
+    return '<div class="card" style="text-align:center;padding:32px;color:var(--dim)"><div style="font-size:32px;margin-bottom:8px">📋</div>'+(isDir?'No hay solicitudes de pago aún':'Aún no has enviado ninguna solicitud de pago')+'</div>';
   }
 
-  solicitudesPago.forEach(function(sol) {
+  // Marcar notificaciones de revisadas como vistas al abrir la tab
+  if(!isDir) {
+    listaSols.filter(function(s){ return s.estatus==='REVISADA'; }).forEach(function(s){
+      _notifIdsVistos.add('rev-'+s.id);
+    });
+    actualizarBadgeNotif();
+  }
+
+  listaSols.forEach(function(sol) {
     var items = solicitudItems.filter(function(si){ return si.solicitud_id===sol.id; });
     var totalSol = items.reduce(function(s,si){ return s+(si.monto||0); },0);
     var aprobados = items.filter(function(si){ return si.aprobado===true; }).reduce(function(s,si){ return s+(si.monto||0); },0);
