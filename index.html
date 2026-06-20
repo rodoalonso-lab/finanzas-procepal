@@ -4026,41 +4026,55 @@ function renderSolicitudesPago() {
 
     // Lista de items
     items.forEach(function(si, idx) {
-      var aprobBg = si.aprobado===true?'rgba(0,209,140,.06)':si.aprobado===false?'rgba(255,77,106,.06)':'';
+      var montoAut  = si.monto_autorizado != null ? si.monto_autorizado : (si.monto||0);
+      var aplicado  = sol.estatus!=='PENDIENTE';
       var bdr = idx<items.length-1?'border-bottom:1px solid var(--border)':'';
-      html += '<div style="padding:8px 0;'+bdr+';background:'+aprobBg+'">';
-      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
-      // Prioridad + reordenar (solo director en pendientes)
+      html += '<div style="padding:10px 0;'+bdr+'">';
+      // Fila prioridad + proveedor
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">';
       if(isDir && sol.estatus==='PENDIENTE') {
         html += '<div style="display:flex;flex-direction:column;gap:1px">';
-        if(idx>0)          html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'arriba\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▲</button>';
+        if(idx>0)              html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'arriba\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▲</button>';
         if(idx<items.length-1) html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'abajo\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▼</button>';
         html += '</div>';
       }
       html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 6px;color:var(--dim)">#'+(idx+1)+'</span>';
       html += '<span style="font-size:13px;font-weight:700;flex:1">'+(si.proveedor||'—')+'</span>';
-      html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:14px;font-weight:800;color:var(--danger)">'+fmt(si.monto||0)+'</span>';
-      // Botones aprobación (director en pendientes)
-      if(isDir && sol.estatus==='PENDIENTE' && (si.aprobado===null||si.aprobado===undefined)) {
-        html += '<button onclick="aprobarSolItem(\''+si.id+'\',\''+sol.id+'\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(0,209,140,.4);background:rgba(0,209,140,.1);color:var(--success);font-size:11px;font-weight:700;cursor:pointer">✓</button>';
-        html += '<button onclick="rechazarSolItem(\''+si.id+'\',\''+sol.id+'\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(255,77,106,.4);background:rgba(255,77,106,.1);color:var(--danger);font-size:11px;font-weight:700;cursor:pointer">✗</button>';
-      } else if(si.aprobado===true) {
-        html += '<span style="font-size:11px;color:var(--success);font-weight:700">✓ Aprobado</span>';
-      } else if(si.aprobado===false) {
-        html += '<span style="font-size:11px;color:var(--danger);font-weight:700">✗ Rechazado</span>';
-      }
+      html += '<span style="font-size:10px;color:var(--dim)">Solicitado:</span>';
+      html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--danger)">'+fmt(si.monto||0)+'</span>';
       html += '</div>';
-      if(si.concepto) html += '<div style="font-size:11px;color:var(--dim);margin-top:2px;padding-left:18px">'+si.concepto+'</div>';
-      if(si.nota_director) html += '<div style="font-size:11px;color:var(--warn);margin-top:2px;padding-left:18px">💬 '+si.nota_director+'</div>';
+      if(si.concepto) html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;padding-left:18px">'+si.concepto+'</div>';
+      // Input monto autorizado (director, solicitud pendiente)
+      if(isDir && sol.estatus==='PENDIENTE') {
+        html += '<div style="display:flex;align-items:center;gap:8px;padding-left:18px;flex-wrap:wrap">';
+        html += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Monto a autorizar:</label>';
+        html += '<input type="number" id="aut-'+si.id+'" value="'+montoAut+'" min="0" step="0.01"';
+        html += ' style="flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none"';
+        html += ' oninput="actualizarTotalAutSol(\''+sol.id+'\')">';
+        html += '<button onclick="setMontoAut(\''+si.id+'\',0)" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,77,106,.4);background:rgba(255,77,106,.1);color:var(--danger);font-size:11px;cursor:pointer" title="Rechazar">✗ No pagar</button>';
+        html += '</div>';
+      } else {
+        // Vista resumen post-aprobación
+        if((si.monto_autorizado||0)>0) {
+          html += '<div style="padding-left:18px;font-size:11px;color:var(--success);font-weight:700">✓ Pagado: '+fmt(si.monto_autorizado)+'</div>';
+        } else {
+          html += '<div style="padding-left:18px;font-size:11px;color:var(--dim)">— No aplicado</div>';
+        }
+      }
+      if(si.nota_director) html += '<div style="font-size:11px;color:var(--warn);margin-top:4px;padding-left:18px">💬 '+si.nota_director+'</div>';
       html += '</div>';
     });
 
-    // Acciones director
+    // Totales y botón aplicar (director, pendiente)
     if(isDir && sol.estatus==='PENDIENTE') {
-      html += '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px">';
-      html += '<div style="font-size:11px;color:var(--dim);flex:1">Aprobado: <strong style="color:var(--success)">'+fmt(aprobados)+'</strong></div>';
-      html += '<button onclick="cerrarSolicitud(\''+sol.id+'\')" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">✓ Marcar revisada</button>';
-      html += '</div>';
+      var totalAutInic = items.reduce(function(s,si){ return s+(si.monto_autorizado!=null?si.monto_autorizado:(si.monto||0)); },0);
+      html += '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
+      html += '<div style="font-size:12px;color:var(--dim)">Total a pagar: <strong id="total-aut-'+sol.id+'" style="color:var(--success);font-size:14px">'+fmt(totalAutInic)+'</strong></div>';
+      html += '<button onclick="aplicarPagosSolicitud(\''+sol.id+'\')" style="background:var(--success);border:none;border-radius:8px;padding:9px 18px;color:#070B14;font-size:12px;font-weight:800;cursor:pointer;font-family:Space Grotesk,sans-serif">💸 Aplicar pagos y cerrar</button>';
+      html += '</div></div>';
+    } else if(sol.estatus==='REVISADA') {
+      html += '<div style="padding:8px 0 0;font-size:11px;color:var(--dim);border-top:1px solid var(--border);margin-top:8px">Pagos aplicados a CxP ✓</div>';
     }
 
     html += '</div>';
