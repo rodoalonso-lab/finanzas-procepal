@@ -4164,6 +4164,127 @@ async function moverPrioridad(itemId, solId, dir) {
   } catch(e) { showToast('Error: '+e.message,'error'); }
 }
 
+// ── NOTIFICACIONES ───────────────────────────────────────────────────────
+var _notifInterval   = null;
+var _notifIdsVistos  = new Set(); // ids de solicitudes ya notificadas
+var _notifPermOk     = false;
+
+function irSolicitudes() {
+  setTab('planeacion');
+  _planTab = 'solicitudes';
+  renderPlaneacion();
+}
+
+async function initNotificaciones() {
+  // Pedir permiso de notificaciones del browser
+  if('Notification' in window) {
+    if(Notification.permission === 'granted') {
+      _notifPermOk = true;
+    } else if(Notification.permission !== 'denied') {
+      Notification.requestPermission().then(function(p){ _notifPermOk = p === 'granted'; });
+    }
+  }
+  // Marcar solicitudes actuales como ya vistas (no notificar al abrir)
+  solicitudesPago.forEach(function(s){ _notifIdsVistos.add(s.id); });
+
+  // Mostrar campana
+  var btn = document.getElementById('notif-btn');
+  if(btn) btn.style.display = 'inline-flex';
+
+  // Actualizar badge inicial
+  actualizarBadgeNotif();
+
+  // Polling cada 45 segundos + al volver a la pestaña
+  if(_notifInterval) clearInterval(_notifInterval);
+  _notifInterval = setInterval(checkNotificaciones, 45000);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible') checkNotificaciones();
+  });
+}
+
+function actualizarBadgeNotif() {
+  var isDir = currentUser && (currentUser.rol==='director'||currentUser.rol==='admin');
+  var count = 0;
+  if(isDir) {
+    count = solicitudesPago.filter(function(s){ return s.estatus==='PENDIENTE'; }).length;
+  } else {
+    // Para el equipo: solicitudes propias con estatus REVISADA no vistas
+    var miNombre = currentUser && currentUser.nombre;
+    count = solicitudesPago.filter(function(s){
+      return s.creado_por === miNombre && s.estatus === 'REVISADA' && !_notifIdsVistos.has('rev-'+s.id);
+    }).length;
+  }
+  var badge = document.getElementById('notif-badge');
+  if(badge) {
+    if(count > 0) {
+      badge.textContent = count > 9 ? '9+' : count;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+async function checkNotificaciones() {
+  if(!currentUser) return;
+  var isDir = currentUser && (currentUser.rol==='director'||currentUser.rol==='admin');
+  try {
+    var sols = await dbSafe('GET','solicitudes_pago?order=created_at.desc&limit=50',null,'notif_check');
+    var nuevas = [];
+
+    if(isDir) {
+      // Director: notificar solicitudes PENDIENTE nuevas
+      sols.filter(function(s){ return s.estatus==='PENDIENTE'; }).forEach(function(s){
+        if(!_notifIdsVistos.has(s.id)) {
+          nuevas.push({ titulo:'💰 Nueva solicitud de pago', cuerpo: (s.creado_por||'Un compañero') + ' envió una solicitud para revisión', id: s.id });
+          _notifIdsVistos.add(s.id);
+        }
+      });
+    } else {
+      // Equipo: notificar cuando sus solicitudes cambian a REVISADA
+      var miNombre = currentUser.nombre;
+      sols.filter(function(s){ return s.creado_por===miNombre && s.estatus==='REVISADA'; }).forEach(function(s){
+        var key = 'rev-'+s.id;
+        if(!_notifIdsVistos.has(key)) {
+          // Calcular aprobados
+          var items = solicitudItems.filter(function(si){ return si.solicitud_id===s.id; });
+          var aprobados = items.filter(function(si){ return si.aprobado===true; }).length;
+          var total = items.length;
+          nuevas.push({ titulo:'✅ Solicitud revisada', cuerpo: aprobados + ' de ' + total + ' pagos aprobados por el director', id: key });
+          _notifIdsVistos.add(key);
+        }
+      });
+    }
+
+    // Actualizar datos en memoria
+    solicitudesPago = sols;
+    solicitudItems  = await dbSafe('GET','solicitud_pago_items?order=prioridad.asc',null,'si_notif');
+
+    // Disparar notificaciones
+    nuevas.forEach(function(n){
+      // Toast en app
+      showToast(n.titulo + ' — ' + n.cuerpo, 'info', 5000);
+      // Notificación del browser
+      if(_notifPermOk && document.visibilityState !== 'visible') {
+        try {
+          var notif = new Notification('Finanzas Procepal — ' + n.titulo, {
+            body: n.cuerpo,
+            icon: 'https://rodoalonso-lab.github.io/metaltek/favicon.ico',
+            tag: n.id
+          });
+          notif.onclick = function(){ window.focus(); irSolicitudes(); notif.close(); };
+        } catch(e){}
+      }
+    });
+
+    // Actualizar badge y badge de sub-tab
+    actualizarBadgeNotif();
+    // Si está en la vista de solicitudes, re-renderizar
+    if(currentTab === 'planeacion' && _planTab === 'solicitudes') renderPlaneacion();
+
+  } catch(e){ console.warn('[Notif]', e); }
+}
+
 async function cerrarSolicitud(solId) {
   try {
     await db('PATCH','solicitudes_pago?id=eq.'+solId,{estatus:'REVISADA'});
