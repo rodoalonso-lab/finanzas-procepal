@@ -4263,7 +4263,7 @@ async function checkNotificaciones() {
     // Disparar notificaciones
     nuevas.forEach(function(n){
       // Toast en app
-      showToast(n.titulo + ' — ' + n.cuerpo, 'info', 5000);
+      showToast(n.titulo + ' — ' + n.cuerpo);
       // Notificación del browser
       if(_notifPermOk && document.visibilityState !== 'visible') {
         try {
