@@ -4039,15 +4039,38 @@ function renderSolicitudesPago() {
     var esCreador = currentUser && sol.creado_por === currentUser.nombre;
     var puedeReordenar = sol.estatus==='PENDIENTE' && (isDir || esCreador);
 
-    html += '<div class="card" style="margin-bottom:12px">';
-    // Encabezado
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">';
-    html += '<div>';
-    html += '<div style="font-size:12px;font-weight:700;color:var(--text)">'+fmtDate(sol.fecha)+(sol.creado_por?' · <span style="color:var(--dim)">'+sol.creado_por+'</span>':'')+'</div>';
-    if(sol.nota) html += '<div style="font-size:11px;color:var(--accent2);margin-top:3px;background:rgba(77,142,255,.08);border-radius:6px;padding:4px 8px">📝 '+sol.nota+'</div>';
+    // Inicializar expansión: PENDIENTE abre automático la primera vez
+    if(!_solIniciadas.has(sol.id)) {
+      _solIniciadas.add(sol.id);
+      if(sol.estatus==='PENDIENTE') _solExpandidas.add(sol.id);
+    }
+    var expandida = _solExpandidas.has(sol.id);
+
+    html += '<div class="card" style="margin-bottom:8px;padding:0;overflow:hidden">';
+
+    // ── Encabezado clicable ────────────────────────────────────────────
+    html += '<div onclick="toggleSol(\''+sol.id+'\')" style="cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:8px;user-select:none;'+(expandida?'border-bottom:1px solid var(--border)':'')+'">';
+    html += '<span style="font-size:10px;color:var(--dim);flex-shrink:0;transition:transform .15s;display:inline-block;transform:rotate('+(expandida?'0':'270')+'deg)">▼</span>';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+fmtDate(sol.fecha)+(sol.creado_por?' · <span style="color:var(--dim)">'+sol.creado_por+'</span>':'')+'</div>';
+    if(!expandida) {
+      html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--danger);font-weight:700">'+fmt(totalSol)+'</span></div>';
+    } else if(sol.nota) {
+      html += '<div style="font-size:11px;color:var(--accent2);margin-top:2px">📝 '+sol.nota+'</div>';
+    }
     html += '</div>';
+    if(expandida && sol.nota) { /* nota ya en subtítulo */ }
+    html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
+    if(expandida) html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--danger)">'+fmt(totalSol)+'</span>';
     html += '<span style="font-size:10px;background:'+estColor+'22;color:'+estColor+';border-radius:20px;padding:2px 8px;font-weight:700;white-space:nowrap">'+sol.estatus+'</span>';
     html += '</div>';
+    html += '</div>'; // fin encabezado
+
+    if(!expandida) { html += '</div>'; return; } // colapsada — solo header
+
+    // ── Cuerpo expandido ───────────────────────────────────────────────
+    html += '<div style="padding:12px 14px 14px">';
+    if(sol.nota && !expandida) html += '<div style="font-size:11px;color:var(--accent2);margin-bottom:8px;background:rgba(77,142,255,.08);border-radius:6px;padding:4px 8px">📝 '+sol.nota+'</div>';
 
     // KPIs saldo vs solicitado (solo director)
     if(isDir && sol.estatus==='PENDIENTE') {
