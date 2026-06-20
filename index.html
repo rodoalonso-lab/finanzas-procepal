@@ -4294,6 +4294,8 @@ function logoutSW() {
 // ── NOTIFICACIONES ───────────────────────────────────────────────────────
 var _notifInterval   = null;
 var _notifIdsVistos  = new Set(); // ids de solicitudes ya notificadas
+var _solExpandidas   = new Set(); // ids de solicitudes con cuerpo visible
+var _solIniciadas    = new Set(); // evita re-inicializar estado de expansión
 var _notifPermOk     = false;
 
 function irSolicitudes() {
