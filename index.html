@@ -4068,7 +4068,8 @@ function renderSolicitudesPago() {
         html += '<input type="number" id="aut-'+si.id+'" value="'+montoAut+'" min="0" step="0.01"';
         html += ' style="flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none"';
         html += ' oninput="actualizarTotalAutSol(\''+sol.id+'\')">';
-        html += '<button onclick="setMontoAut(\''+si.id+'\',0)" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,77,106,.4);background:rgba(255,77,106,.1);color:var(--danger);font-size:11px;cursor:pointer" title="Rechazar">✗ No pagar</button>';
+        html += '<button onclick="setMontoAut(\''+si.id+'\','+(si.monto||0)+')" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(0,209,140,.4);background:rgba(0,209,140,.1);color:var(--success);font-size:11px;cursor:pointer;font-weight:700" title="Pago total">✓ Total</button>';
+        html += '<button onclick="setMontoAut(\''+si.id+'\',0)" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,77,106,.4);background:rgba(255,77,106,.1);color:var(--danger);font-size:11px;cursor:pointer" title="No pagar">✗ No pagar</button>';
         html += '</div>';
       } else {
         // Vista resumen post-aprobación
