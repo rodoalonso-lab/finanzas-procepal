@@ -4082,13 +4082,15 @@ function renderSolicitudesPago() {
         html += '</div>';
       }
       var cxpRef = si.cxp_id ? cxpData.find(function(c){ return c.id === si.cxp_id; }) : null;
-      var razonLabel = cxpRef && cxpRef.razon ? cxpRef.razon : (si.razon || null);
+      var razonLabel   = cxpRef && cxpRef.razon       ? cxpRef.razon       : (si.razon || null);
+      var beneficiario = cxpRef && cxpRef.beneficiario ? cxpRef.beneficiario : null;
       html += '<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 6px;color:var(--dim)">#'+(idx+1)+'</span>';
       if(razonLabel) html += '<span style="font-size:10px;font-weight:800;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#a5b4fc;border-radius:20px;padding:1px 8px">'+razonLabel+'</span>';
       html += '<span style="font-size:13px;font-weight:700;flex:1">'+(si.proveedor||'—')+'</span>';
       html += '<span style="font-size:10px;color:var(--dim)">Solicitado:</span>';
       html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--danger)">'+fmt(si.monto||0)+'</span>';
       html += '</div>';
+      if(beneficiario) html += '<div style="font-size:11px;padding-left:18px;margin-bottom:4px;display:flex;align-items:center;gap:5px"><span style="color:var(--dim)">🏦</span><span style="color:var(--text);font-weight:600;letter-spacing:.03em;font-family:monospace">'+beneficiario+'</span></div>';
       if(si.concepto) html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;padding-left:18px">'+si.concepto+'</div>';
       // Input monto autorizado (director, solicitud pendiente)
       if(isDir && sol.estatus==='PENDIENTE') {
