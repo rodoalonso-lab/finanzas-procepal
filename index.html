@@ -4207,6 +4207,32 @@ async function aplicarPagosSolicitud(solId) {
   } catch(e) { showToast('Error: '+e.message,'error'); console.error(e); }
 }
 
+async function aplicarPagoItemPendiente(siId, cxpId, solId) {
+  var inp = document.getElementById('pago-pend-'+siId);
+  var monto = inp ? (parseFloat(inp.value)||0) : 0;
+  if(monto <= 0) { showToast('Escribe un monto mayor a 0','warn'); return; }
+  if(!confirm('¿Aplicar pago de '+fmt(monto)+' a esta CxP?')) return;
+  try {
+    showToast('Aplicando...');
+    // Guardar monto en el item de la solicitud
+    await db('PATCH','solicitud_pago_items?id=eq.'+siId,{ monto_autorizado: monto, aprobado: true });
+    // Aplicar abono a la CxP
+    var cxp = cxpData.find(function(c){ return c.id===cxpId; });
+    if(!cxp) {
+      var r = await dbSafe('GET','cuentas_por_pagar?id=eq.'+cxpId,null,'cxp_pend');
+      cxp = r[0];
+    }
+    if(cxp) {
+      var nuevoPagado  = (parseFloat(cxp.pagado_parcial)||0) + monto;
+      var nuevoEstatus = nuevoPagado >= (parseFloat(cxp.monto)||0) ? 'PAGADO' : cxp.estatus;
+      await db('PATCH','cuentas_por_pagar?id=eq.'+cxpId,{ pagado_parcial: nuevoPagado, estatus: nuevoEstatus });
+    }
+    showToast('✅ Pago aplicado');
+    await loadPlaneacion();
+    renderPlaneacion();
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+}
+
 async function moverPrioridad(itemId, solId, dir) {
   var items = solicitudItems.filter(function(si){ return si.solicitud_id===solId; }).sort(function(a,b){ return (a.prioridad||0)-(b.prioridad||0); });
   var idx = items.findIndex(function(si){ return si.id===itemId; });
