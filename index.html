@@ -4033,6 +4033,7 @@ function renderSolicitudesPago() {
 
     // KPIs saldo vs solicitado (solo director)
     if(isDir && sol.estatus==='PENDIENTE') {
+      var totalAutInicKpi = items.reduce(function(s,si){ return s+(si.monto_autorizado!=null?si.monto_autorizado:(si.monto||0)); },0);
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
       html += '<div style="background:rgba(0,209,140,.06);border:1px solid rgba(0,209,140,.15);border-radius:8px;padding:8px 10px"><div style="font-size:9px;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:2px">Saldo disponible</div><div style="font-size:13px;font-weight:800;color:var(--success)">'+fmt(saldoTotal)+'</div></div>';
       html += '<div style="background:rgba(255,77,106,.06);border:1px solid rgba(255,77,106,.15);border-radius:8px;padding:8px 10px"><div style="font-size:9px;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:2px">Total solicitado</div><div style="font-size:13px;font-weight:800;color:var(--danger)">'+fmt(totalSol)+'</div></div>';
@@ -4041,6 +4042,11 @@ function renderSolicitudesPago() {
       var barColor = pct>100?'var(--danger)':pct>70?'var(--warn)':'var(--accent)';
       html += '<div style="background:var(--surface);border-radius:4px;height:6px"><div style="background:'+barColor+';height:6px;border-radius:4px;width:'+Math.min(pct,100)+'%;transition:width .4s"></div></div>';
       html += '<div style="font-size:10px;color:'+barColor+';font-weight:700;text-align:right;margin-top:2px">'+pct+'% del saldo</div></div>';
+      // Banner sticky total autorizado
+      html += '<div id="sticky-aut-'+sol.id+'" style="position:sticky;top:0;z-index:10;background:var(--card);border:1px solid rgba(0,209,140,.35);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.35)">';
+      html += '<div style="font-size:11px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.04em">💸 Total a autorizar</div>';
+      html += '<div style="font-size:20px;font-weight:900;font-family:Bricolage Grotesque,sans-serif;color:var(--success)" id="total-aut-'+sol.id+'">'+fmt(totalAutInicKpi)+'</div>';
+      html += '</div>';
     }
 
     // Lista de items
