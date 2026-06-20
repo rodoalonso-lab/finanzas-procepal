@@ -4051,7 +4051,7 @@ function renderSolicitudesPago() {
       html += '<div style="padding:10px 0;'+bdr+'">';
       // Fila prioridad + proveedor
       html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">';
-      if(isDir && sol.estatus==='PENDIENTE') {
+      if(puedeReordenar) {
         html += '<div style="display:flex;flex-direction:column;gap:1px">';
         if(idx>0)              html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'arriba\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▲</button>';
         if(idx<items.length-1) html += '<button onclick="moverPrioridad(\''+si.id+'\',\''+sol.id+'\',\'abajo\')" style="border:none;background:none;color:var(--dim);font-size:10px;cursor:pointer;padding:0;line-height:1">▼</button>';
