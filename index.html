@@ -562,6 +562,9 @@ body.tema-claro .sub-nav{background:#FFFFFF}
   <div class="theme-track"><div class="theme-thumb"></div></div>
   <i class="ti ti-sun theme-icon theme-icon-sol" aria-hidden="true"></i>
 </div>
+<button id="notif-btn" onclick="irSolicitudes()" title="Solicitudes de pago" style="display:none;position:relative;background:none;border:none;cursor:pointer;font-size:20px;padding:4px 8px;color:var(--dim)">
+  🔔<span id="notif-badge" style="display:none;position:absolute;top:0;right:0;background:var(--danger);color:#fff;font-size:9px;font-weight:800;border-radius:50%;width:16px;height:16px;display:none;align-items:center;justify-content:center;font-family:Space Grotesk,sans-serif"></span>
+</button>
 <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()" title="Actualizar datos">↻</button>
 <button class="logout-btn" onclick="doLogout()">Salir</button>
   </div>
