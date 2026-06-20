@@ -6119,43 +6119,6 @@ if('serviceWorker' in navigator){
 var CLAUDE_URL='https://pviiuaukqvrdyttwulcw.supabase.co/functions/v1/claude-proxy';
 var claudeOpen=false, claudeHist=[];
 
-// ── Drag claude-fab ──────────────────────────────────────────────────────
-(function(){
-  var el, dragging=false, startX, startY, origLeft, origBottom, moved=false;
-  document.addEventListener('DOMContentLoaded', function(){
-    el = document.getElementById('claude-fab');
-    if(!el) return;
-    el.addEventListener('mousedown', function(e){
-      dragging=true; moved=false;
-      startX=e.clientX; startY=e.clientY;
-      // Convertir bottom/left a valores numéricos desde posición actual
-      var rect = el.getBoundingClientRect();
-      origLeft   = rect.left;
-      origBottom = window.innerHeight - rect.bottom;
-      el.style.left   = origLeft+'px';
-      el.style.bottom = origBottom+'px';
-      el.style.transition='none';
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', function(e){
-      if(!dragging) return;
-      var dx=e.clientX-startX, dy=e.clientY-startY;
-      if(Math.abs(dx)>4||Math.abs(dy)>4) moved=true;
-      var newLeft   = Math.max(0, Math.min(window.innerWidth-60,  origLeft+dx));
-      var newBottom = Math.max(0, Math.min(window.innerHeight-60, origBottom-dy));
-      el.style.left   = newLeft+'px';
-      el.style.bottom = newBottom+'px';
-    });
-    document.addEventListener('mouseup', function(e){
-      if(!dragging) return;
-      dragging=false;
-      el.style.transition='';
-      if(moved) e.stopImmediatePropagation();
-    });
-    // Si fue drag, no abrir panel
-    el.addEventListener('click', function(e){ if(moved){ moved=false; e.stopImmediatePropagation(); } }, true);
-  });
-})();
 function claudeToggle(){
   claudeOpen=!claudeOpen;
   var p=document.getElementById('claude-panel');
