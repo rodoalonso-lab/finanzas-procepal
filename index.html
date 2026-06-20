@@ -6168,25 +6168,48 @@ function claudeSuggest(t){document.getElementById('claude-input').value=t;claude
 function claudeCtx(){
   var lines=[];
   try{
-    if(typeof allMovs!=='undefined'&&allMovs.length){
-      var ing=allMovs.filter(function(m){return m.tipo==='ingreso';}).reduce(function(s,m){return s+(m.monto||0);},0);
-      var egr=allMovs.filter(function(m){return m.tipo==='egreso';}).reduce(function(s,m){return s+(m.monto||0);},0);
-      lines.push('Movimientos cargados: '+allMovs.length);
-      lines.push('Ingresos: $'+ing.toLocaleString('es-MX',{minimumFractionDigits:2}));
-      lines.push('Egresos: $'+egr.toLocaleString('es-MX',{minimumFractionDigits:2}));
-      lines.push('Balance: $'+(ing-egr).toLocaleString('es-MX',{minimumFractionDigits:2}));
+    // Saldo de cuentas bancarias
+    if(typeof cuentas!=='undefined'&&cuentas.length){
+      var saldoTotal=cuentas.reduce(function(s,c){return s+(c.saldo_actual||c.saldo_inicial||0);},0);
+      lines.push('Saldo disponible en cuentas: $'+saldoTotal.toLocaleString('es-MX',{minimumFractionDigits:2}));
+      cuentas.forEach(function(c){ lines.push('  · '+c.nombre+': $'+(c.saldo_actual||c.saldo_inicial||0).toLocaleString('es-MX',{minimumFractionDigits:2})); });
     }
-    if(typeof allCxC!=='undefined'&&allCxC.length){
-      var cxc=allCxC.filter(function(c){return !c.pagada;}).reduce(function(s,c){return s+(c.monto||0);},0);
-      lines.push('CxC pendiente: $'+cxc.toLocaleString('es-MX',{minimumFractionDigits:2}));
+    // Movimientos
+    if(typeof movimientos!=='undefined'&&movimientos.length){
+      var ing=movimientos.filter(function(m){return m.tipo==='ingreso';}).reduce(function(s,m){return s+(m.monto||0);},0);
+      var egr=movimientos.filter(function(m){return m.tipo==='egreso';}).reduce(function(s,m){return s+(m.monto||0);},0);
+      lines.push('Movimientos registrados: '+movimientos.length);
+      lines.push('Total ingresos: $'+ing.toLocaleString('es-MX',{minimumFractionDigits:2}));
+      lines.push('Total egresos: $'+egr.toLocaleString('es-MX',{minimumFractionDigits:2}));
     }
-    if(typeof allCxP!=='undefined'&&allCxP.length){
-      var cxp=allCxP.filter(function(c){return !c.pagada;}).reduce(function(s,c){return s+(c.monto||0);},0);
-      lines.push('CxP pendiente: $'+cxp.toLocaleString('es-MX',{minimumFractionDigits:2}));
+    // CxP
+    if(typeof cxpData!=='undefined'&&cxpData.length){
+      var cxpPend=cxpData.filter(function(c){return c.estatus!=='PAGADO';});
+      var cxpTotal=cxpPend.reduce(function(s,c){return s+Math.max(0,(c.monto||0)-(c.pagado_parcial||0));},0);
+      var cxpVenc=cxpPend.filter(function(c){return c.estatus==='VENCIDO';});
+      lines.push('Cuentas por pagar pendientes: '+cxpPend.length+' ('+cxpVenc.length+' vencidas)');
+      lines.push('Total por pagar: $'+cxpTotal.toLocaleString('es-MX',{minimumFractionDigits:2}));
     }
-  }catch(e){}
-  return lines.length?'\n\nDatos en pantalla:\n'+lines.join('\n'):'';
+    // CxC
+    if(typeof cxcData!=='undefined'&&cxcData.length){
+      var cxcPend=cxcData.filter(function(c){return c.estatus!=='COBRADO';});
+      var cxcTotal=cxcPend.reduce(function(s,c){return s+(c.monto||0);},0);
+      lines.push('Cuentas por cobrar pendientes: '+cxcPend.length);
+      lines.push('Total por cobrar: $'+cxcTotal.toLocaleString('es-MX',{minimumFractionDigits:2}));
+    }
+    // Solicitudes pendientes
+    if(typeof solicitudesPago!=='undefined'&&solicitudesPago.length){
+      var solPend=solicitudesPago.filter(function(s){return s.estatus==='PENDIENTE';});
+      if(solPend.length) lines.push('Solicitudes de pago pendientes de aprobar: '+solPend.length);
+    }
+    // Usuario
+    if(typeof currentUser!=='undefined'&&currentUser){
+      lines.push('Usuario: '+currentUser.nombre+' ('+currentUser.rol+')');
+    }
+  }catch(e){ console.warn('[claudeCtx]',e); }
+  return lines.length?'\n\nContexto financiero actual:\n'+lines.join('\n'):'';
 }
+
 async function claudeSend(){
   var inp=document.getElementById('claude-input');
   var q=inp.value.trim(); if(!q)return;
@@ -6197,24 +6220,36 @@ async function claudeSend(){
   claudeHist.push({role:'user',content:q});
   var tid=claudeAddMsg('typing','Claude esta pensando...');
   try{
-    var tok=getToken(); // via procepal-lib.js
-    var sys='Eres el asistente financiero de Procepal, empresa constructora mexicana. Responde SIEMPRE en espanol. Se conciso y practico. Montos en pesos mexicanos (MXN).'+claudeCtx();
+    var tok = await getValidToken(); // async — fix del bug original
+    var sys='Eres el asistente financiero de Procepal, empresa constructora mexicana. '+
+            'Responde SIEMPRE en español. Sé conciso y práctico. '+
+            'Montos en pesos mexicanos (MXN). '+
+            'Solo usa los datos que te comparto; no inventes cifras.'+claudeCtx();
     var r=await fetch(CLAUDE_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
       body:JSON.stringify({system:sys,messages:claudeHist.slice(-10),max_tokens:1200})
     });
-    var d=await r.json();
     var el=document.getElementById(tid); if(el)el.remove();
-    if(d.error){claudeAddMsg('error','Error: '+d.error);}
-    else{
-      var resp=d.content&&d.content[0]?d.content[0].text:'Sin respuesta';
+    if(!r.ok){
+      var errText=await r.text();
+      console.error('[Claude] HTTP '+r.status, errText);
+      claudeAddMsg('error','Error '+r.status+': '+errText.slice(0,120));
+      btn.disabled=false; btn.textContent='Enviar'; return;
+    }
+    var d=await r.json();
+    if(d.error){
+      console.error('[Claude] API error',d.error);
+      claudeAddMsg('error','Error: '+(typeof d.error==='string'?d.error:JSON.stringify(d.error)));
+    } else {
+      var resp=d.content&&d.content[0]?d.content[0].text:(d.text||'Sin respuesta');
       claudeAddMsg('assistant',resp);
       claudeHist.push({role:'assistant',content:resp});
     }
   }catch(e){
     var el2=document.getElementById(tid); if(el2)el2.remove();
-    claudeAddMsg('error','No se pudo conectar con Claude.');
+    console.error('[Claude] excepción',e);
+    claudeAddMsg('error','Sin conexión: '+e.message);
   }
   btn.disabled=false; btn.textContent='Enviar';
 }
