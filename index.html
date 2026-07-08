@@ -663,10 +663,11 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     <div class="sheet-handle"></div>
     <div style="padding:18px 0 4px">
       <div class="sheet-top">
-        <div class="sheet-title">Nueva Cuenta</div>
+        <div class="sheet-title" id="sc-title">Nueva Cuenta</div>
         <button class="sheet-close" onclick="closeSheet('cuenta')">✕</button>
       </div>
     </div>
+    <input type="hidden" id="sc-id">
     <div class="form-group"><div class="form-label">Nombre de la cuenta *</div>
       <input class="form-input" id="sc-nombre" type="text" placeholder="Ej. BBVA Empresarial">
     </div>
@@ -687,10 +688,11 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     <div class="form-group"><div class="form-label">CLABE</div>
       <input class="form-input" id="sc-clabe" type="text" placeholder="18 dígitos" maxlength="18">
     </div>
-    <div class="form-group"><div class="form-label">Saldo inicial</div>
+    <div class="form-group"><div class="form-label" id="sc-saldo-label">Saldo inicial</div>
       <input class="form-input" id="sc-saldo" type="number" placeholder="0.00" step="0.01">
     </div>
     <button class="btn btn-accent" id="sc-save-btn" onclick="saveCuenta()">Guardar cuenta</button>
+    <button class="btn btn-ghost" id="sc-delete-btn" style="display:none;color:var(--danger);border-color:var(--danger)" onclick="eliminarCuenta()">Eliminar cuenta</button>
     <button class="btn btn-ghost" onclick="closeSheet('cuenta')">Cancelar</button>
   </div>
 </div>
@@ -1832,8 +1834,8 @@ function renderCuentas() {
       const movsCuenta = movimientos.filter(m=>m.cuenta_id===c.id);
       const ingresosCuenta = movsCuenta.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+(m.monto||0),0);
       const egresosCuenta = movsCuenta.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+(m.monto||0),0);
-      html += `<div class="cuenta-card" style="border-color:${color}44">
-        <div class="cuenta-card::before" style="background:${color}"></div>
+      html += `<div class="cuenta-card" style="border-color:${color}44;position:relative">
+        <button onclick="editarCuenta('${c.id}')" title="Editar cuenta" style="position:absolute;top:10px;right:10px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:12px;padding:3px 8px;cursor:pointer;line-height:1">✏️</button>
         <div class="cuenta-bank">${c.banco||c.tipo||'Banco'}</div>
         <div class="cuenta-name">${c.nombre}</div>
         <div class="cuenta-saldo" style="color:${color}">${fmt(saldo)}</div>
@@ -1849,49 +1851,95 @@ function renderCuentas() {
 }
 
 function openNewCuenta() {
-  ['sc-nombre','sc-banco','sc-num','sc-clabe'].forEach(id=>document.getElementById(id).value='');
+  ['sc-id','sc-nombre','sc-banco','sc-num','sc-clabe'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('sc-saldo').value='0';
   document.getElementById('sc-tipo').value='cheques';
+  document.getElementById('sc-title').textContent='Nueva Cuenta';
+  document.getElementById('sc-saldo-label').textContent='Saldo inicial';
+  document.getElementById('sc-save-btn').textContent='Guardar cuenta';
+  document.getElementById('sc-delete-btn').style.display='none';
   openSheet('cuenta');
+}
+
+function editarCuenta(id) {
+  var c = cuentas.find(function(x){ return x.id===id; });
+  if(!c) return;
+  document.getElementById('sc-id').value = c.id;
+  document.getElementById('sc-nombre').value = c.nombre||'';
+  document.getElementById('sc-banco').value = c.banco||'';
+  document.getElementById('sc-tipo').value = c.tipo||'cheques';
+  document.getElementById('sc-num').value = c.numero_cuenta||'';
+  document.getElementById('sc-clabe').value = c.clabe||'';
+  document.getElementById('sc-saldo').value = c.saldo_actual!=null ? c.saldo_actual : (c.saldo_inicial||0);
+  document.getElementById('sc-title').textContent='Editar Cuenta';
+  document.getElementById('sc-saldo-label').textContent='Saldo actual';
+  document.getElementById('sc-save-btn').textContent='Guardar cambios';
+  document.getElementById('sc-delete-btn').style.display='';
+  openSheet('cuenta');
+}
+
+async function eliminarCuenta() {
+  var id = document.getElementById('sc-id').value;
+  var c = cuentas.find(function(x){ return x.id===id; });
+  if(!id || !c) return;
+  if(!confirm('¿Eliminar la cuenta "'+c.nombre+'"? Esta acción no se puede deshacer.')) return;
+  try {
+    await db('DELETE','cuentas_bancarias?id=eq.'+id);
+    cuentas = cuentas.filter(function(x){ return x.id!==id; });
+    showToast('Cuenta eliminada');
+    closeSheet('cuenta');
+    renderCuentas();
+  } catch(e) { showToast('Error: '+e.message, true); }
 }
 
 async function saveCuenta() {
   const nombre = document.getElementById('sc-nombre').value.trim();
   if(!nombre){ showToast('Escribe el nombre de la cuenta',true); return; }
   const btn = document.getElementById('sc-save-btn');
+  const editId = document.getElementById('sc-id').value;
+  const originalText = btn.textContent;
   btn.textContent='Guardando...'; btn.disabled=true;
   try {
-    const payload = { nombre, tipo: document.getElementById('sc-tipo').value,
-      saldo_inicial: parseFloat(document.getElementById('sc-saldo').value)||0,
-      saldo_actual: parseFloat(document.getElementById('sc-saldo').value)||0 };
+    const saldo = parseFloat(document.getElementById('sc-saldo').value)||0;
+    const payload = { nombre, tipo: document.getElementById('sc-tipo').value, saldo_actual: saldo };
     const banco = document.getElementById('sc-banco').value.trim();
     const num = document.getElementById('sc-num').value.trim();
     const clabe = document.getElementById('sc-clabe').value.trim();
-    if(banco) payload.banco = banco;
-    if(num) payload.numero_cuenta = num;
-    if(clabe) payload.clabe = clabe;
-    const res = await fetch(SUPABASE_URL+'/rest/v1/cuentas_bancarias',{
-      method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+(await getValidToken()),'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify(payload)
-    });
-    if(!res.ok){
-      let errMsg = res.statusText;
-      try{ const j=await res.json(); errMsg=j.message||j.hint||j.details||JSON.stringify(j); }catch(e2){}
-      console.error('Supabase error saving cuenta:', res.status, errMsg);
-      showToast('Error '+res.status+': '+errMsg.slice(0,80), true);
-      btn.textContent='Guardar cuenta'; btn.disabled=false;
-      return;
+    if(banco) payload.banco = banco; else payload.banco = null;
+    if(num) payload.numero_cuenta = num; else payload.numero_cuenta = null;
+    if(clabe) payload.clabe = clabe; else payload.clabe = null;
+
+    if(editId) {
+      // PATCH — editar cuenta existente
+      await db('PATCH','cuentas_bancarias?id=eq.'+editId, payload);
+      var c = cuentas.find(function(x){ return x.id===editId; });
+      if(c) Object.assign(c, payload);
+      showToast('✅ Cuenta actualizada');
+    } else {
+      // POST — nueva cuenta
+      payload.saldo_inicial = saldo;
+      const res = await fetch(SUPABASE_URL+'/rest/v1/cuentas_bancarias',{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+(await getValidToken()),'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify(payload)
+      });
+      if(!res.ok){
+        let errMsg = res.statusText;
+        try{ const j=await res.json(); errMsg=j.message||j.hint||j.details||JSON.stringify(j); }catch(e2){}
+        showToast('Error '+res.status+': '+errMsg.slice(0,80), true);
+        btn.textContent=originalText; btn.disabled=false;
+        return;
+      }
+      showToast('✅ Cuenta guardada');
+      await loadAll();
     }
-    showToast('Cuenta guardada');
     closeSheet('cuenta');
-    await loadAll();
     renderCuentas();
   } catch(e){
     console.error('saveCuenta error:', e);
     showToast('Error: '+e.message, true);
   }
-  btn.textContent='Guardar cuenta'; btn.disabled=false;
+  btn.textContent=originalText; btn.disabled=false;
 }
 
 // ── MOVIMIENTOS ───────────────────────────────────────
@@ -6173,67 +6221,4 @@ async function guardarPagoCXP() {
   var x = cxpData.find(function(c){return c.id===_pagoCXPId;});
   if(!x) return;
 
-  var pago  = parseFloat(document.getElementById('pcxp-monto').value)||0;
-  var fecha = document.getElementById('pcxp-fecha').value;
-  if(!pago||pago<=0) { showToast('Ingresa un monto válido',true); return; }
-  if(!fecha)         { showToast('Selecciona la fecha del pago',true); return; }
-
-  var pagadoParcial = x.pagado_parcial||0;
-  var saldoActual   = Math.max(0,(x.monto||0)-pagadoParcial);
-  if(pago > saldoActual+0.01) {
-    showToast('El pago ('+fmt(pago)+') supera el saldo pendiente ('+fmt(saldoActual)+')',true);
-    return;
-  }
-
-  var btn = document.getElementById('pcxp-save-btn');
-  btn.textContent='Guardando...'; btn.disabled=true;
-
-  try {
-    var nuevoPagado = Math.round((pagadoParcial+pago)*100)/100;
-    var nuevoSaldo  = Math.max(0, Math.round((saldoActual-pago)*100)/100);
-    var nuevoEstatus = nuevoSaldo<=0.01 ? 'PAGADO' : x.estatus;
-
-    // 1. Actualizar CxP: pagado_parcial y estatus
-    await db('PATCH','cuentas_por_pagar?id=eq.'+_pagoCXPId, {
-      pagado_parcial: nuevoPagado,
-      estatus:        nuevoEstatus
-    });
-
-    // AISLAMIENTO DE MÓDULOS: el pago de CxP se registra SOLO en cuentas_por_pagar
-    // NO se inserta en 'movimientos' — esa tabla es exclusiva de Control Presupuestal
-    // Los egresos de Control Presupuestal vienen de requisiciones aprobadas en MetalTek
-    console.log('[Planeación] Pago CxP actualizado. Módulo aislado de Control Presupuestal.');
-
-    var msg = nuevoSaldo<=0.01
-      ? '✅ Pago completo — CxP liquidada'
-      : '✅ Pago de '+fmt(pago)+' registrado · Saldo: '+fmt(nuevoSaldo);
-    showToast(msg);
-    closeSheet('pago-cxp');
-    await loadPlaneacion(); // Solo recarga datos de Planeación
-    renderPlaneacion();
-
-  } catch(e) {
-    showToast('Error: '+e.message, true);
-  }
-  btn.textContent='✅ Registrar pago'; btn.disabled=false;
-}
-
-// ── Cerrar dropdowns al hacer click fuera ─────────────
-document.addEventListener('click', function(){
-  if(cfdiNominaDropdownOpen){
-    cfdiNominaDropdownOpen = false;
-    const panel = document.getElementById('nomina-trab-panel');
-    if(panel) panel.style.display = 'none';
-  }
-  if(cfdiNominaDropdownSemanaOpen){
-    cfdiNominaDropdownSemanaOpen = false;
-    const panel = document.getElementById('nomina-sem-panel');
-    if(panel) panel.style.display = 'none';
-  }
-});
-
-// ── PWA ───────────────────────────────────────────────
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-</script>
+  var pago  = parseFloat(document.getElementById('p
