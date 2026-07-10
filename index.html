@@ -6264,21 +6264,48 @@ async function guardarPagoCXP() {
   btn.textContent='Guardando...'; btn.disabled=true;
 
   try {
-    var nuevoPagado = Math.round((pagadoParcial+pago)*100)/100;
-    var nuevoSaldo  = Math.max(0, Math.round((saldoActual-pago)*100)/100);
+    var nuevoPagado  = Math.round((pagadoParcial+pago)*100)/100;
+    var nuevoSaldo   = Math.max(0, Math.round((saldoActual-pago)*100)/100);
     var nuevoEstatus = nuevoSaldo<=0.01 ? 'PAGADO' : x.estatus;
 
-    // 1. Actualizar CxP: pagado_parcial y estatus
     await db('PATCH','cuentas_por_pagar?id=eq.'+_pagoCXPId, {
       pagado_parcial: nuevoPagado,
       estatus:        nuevoEstatus
     });
 
-    // AISLAMIENTO DE MÓDULOS: el pago de CxP se registra SOLO en cuentas_por_pagar
-    // NO se inserta en 'movimientos' — esa tabla es exclusiva de Control Presupuestal
-    // Los egresos de Control Presupuestal vienen de requisiciones aprobadas en MetalTek
-    console.log('[Planeación] Pago CxP actualizado. Módulo aislado de Control Presupuestal.');
-
     var msg = nuevoSaldo<=0.01
       ? '✅ Pago completo — CxP liquidada'
-      : '✅ Pago de '+fmt
+      : '✅ Pago de '+fmt(pago)+' registrado. Saldo: '+fmt(nuevoSaldo);
+    showToast(msg);
+    closeSheet('pago-cxp');
+    await loadPlaneacion();
+    renderPlaneacion();
+
+  } catch(e) {
+    showToast('Error: '+e.message, true);
+  }
+  btn.textContent='✅ Registrar pago'; btn.disabled=false;
+}
+
+// ── Cerrar dropdowns al hacer click fuera ─────────────
+document.addEventListener('click', function(){
+  if(cfdiNominaDropdownOpen){
+    cfdiNominaDropdownOpen = false;
+    var panel = document.getElementById('nomina-trab-panel');
+    if(panel) panel.style.display='none';
+  }
+  if(typeof cfdiNominaDropdownSemanaOpen !== 'undefined' && cfdiNominaDropdownSemanaOpen){
+    cfdiNominaDropdownSemanaOpen = false;
+    var panel2 = document.getElementById('nomina-sem-panel');
+    if(panel2) panel2.style.display='none';
+  }
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
