@@ -6221,4 +6221,67 @@ async function guardarPagoCXP() {
   var x = cxpData.find(function(c){return c.id===_pagoCXPId;});
   if(!x) return;
 
-  var pago  = parseFloat(document.getElementById('p
+  var pago  = parseFloat(document.getElementById('pcxp-monto').value)||0;
+  var fecha = document.getElementById('pcxp-fecha').value;
+  if(!pago||pago<=0) { showToast('Ingresa un monto válido',true); return; }
+  if(!fecha)         { showToast('Selecciona la fecha del pago',true); return; }
+
+  var pagadoParcial = x.pagado_parcial||0;
+  var saldoActual   = Math.max(0,(x.monto||0)-pagadoParcial);
+  if(pago > saldoActual+0.01) {
+    showToast('El pago ('+fmt(pago)+') supera el saldo pendiente ('+fmt(saldoActual)+')',true);
+    return;
+  }
+
+  var btn = document.getElementById('pcxp-save-btn');
+  btn.textContent='Guardando...'; btn.disabled=true;
+
+  try {
+    var nuevoPagado = Math.round((pagadoParcial+pago)*100)/100;
+    var nuevoSaldo  = Math.max(0, Math.round((saldoActual-pago)*100)/100);
+    var nuevoEstatus = nuevoSaldo<=0.01 ? 'PAGADO' : x.estatus;
+
+    // 1. Actualizar CxP: pagado_parcial y estatus
+    await db('PATCH','cuentas_por_pagar?id=eq.'+_pagoCXPId, {
+      pagado_parcial: nuevoPagado,
+      estatus:        nuevoEstatus
+    });
+
+    // AISLAMIENTO DE MÓDULOS: el pago de CxP se registra SOLO en cuentas_por_pagar
+    // NO se inserta en 'movimientos' — esa tabla es exclusiva de Control Presupuestal
+    // Los egresos de Control Presupuestal vienen de requisiciones aprobadas en MetalTek
+    console.log('[Planeación] Pago CxP actualizado. Módulo aislado de Control Presupuestal.');
+
+    var msg = nuevoSaldo<=0.01
+      ? '✅ Pago completo — CxP liquidada'
+      : '✅ Pago de '+fmt(pago)+' registrado · Saldo: '+fmt(nuevoSaldo);
+    showToast(msg);
+    closeSheet('pago-cxp');
+    await loadPlaneacion(); // Solo recarga datos de Planeación
+    renderPlaneacion();
+
+  } catch(e) {
+    showToast('Error: '+e.message, true);
+  }
+  btn.textContent='✅ Registrar pago'; btn.disabled=false;
+}
+
+// ── Cerrar dropdowns al hacer click fuera ─────────────
+document.addEventListener('click', function(){
+  if(cfdiNominaDropdownOpen){
+    cfdiNominaDropdownOpen = false;
+    const panel = document.getElementById('nomina-trab-panel');
+    if(panel) panel.style.display = 'none';
+  }
+  if(cfdiNominaDropdownSemanaOpen){
+    cfdiNominaDropdownSemanaOpen = false;
+    const panel = document.getElementById('nomina-sem-panel');
+    if(panel) panel.style.display = 'none';
+  }
+});
+
+// ── PWA ───────────────────────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
