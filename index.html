@@ -4082,17 +4082,34 @@ function renderSolicitudesPago() {
     actualizarBadgeNotif();
   }
 
-  // Banner global total autorizado (director, si hay pendientes)
+  // Banner global total autorizado (director, si hay pendientes o parcialmente pagadas)
   if(isDir) {
-    var solsPend = listaSols.filter(function(s){ return s.estatus==='PENDIENTE'; });
-    if(solsPend.length) {
+    var solsPend    = listaSols.filter(function(s){ return s.estatus==='PENDIENTE'; });
+    // Solicitudes REVISADAS que son PAGADA PARCIALMENTE (tienen saldo pendiente)
+    var solsParcial = listaSols.filter(function(s){
+      if(s.estatus!=='REVISADA') return false;
+      var its = solicitudItems.filter(function(si){ return si.solicitud_id===s.id; });
+      var tot = its.reduce(function(a,si){ return a+(si.monto||0); },0);
+      var aut = its.reduce(function(a,si){ return a+(si.monto_autorizado||0); },0);
+      return tot > 0 && aut < tot;
+    });
+    if(solsPend.length || solsParcial.length) {
+      // Pendientes: monto completo
       var itemsPend = solicitudItems.filter(function(si){ return solsPend.some(function(s){ return s.id===si.solicitud_id; }); });
-      var totalGlobalInic = itemsPend.reduce(function(s,si){ return s+(si.monto_autorizado!=null?si.monto_autorizado:(si.monto||0)); },0);
-      var totalGlobalSolic = itemsPend.reduce(function(s,si){ return s+(si.monto||0); },0);
+      var totalPend = itemsPend.reduce(function(s,si){ return s+(si.monto||0); },0);
+      var totalAutInic = itemsPend.reduce(function(s,si){ return s+(si.monto_autorizado!=null?si.monto_autorizado:(si.monto||0)); },0);
+      // Parciales: solo el saldo restante
+      var saldoParcial = 0;
+      solsParcial.forEach(function(s){
+        var its = solicitudItems.filter(function(si){ return si.solicitud_id===s.id; });
+        its.forEach(function(si){ saldoParcial += Math.max(0,(si.monto||0)-(si.monto_autorizado||0)); });
+      });
+      var totalGlobalSolic = totalPend + saldoParcial;
+      var totalGlobalInic  = totalAutInic;
       html += '<div id="banner-total-global" style="position:sticky;top:0;z-index:20;background:var(--card);border:2px solid rgba(0,209,140,.4);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.4);flex-wrap:wrap">';
       html += '<div>';
       html += '<div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Total a autorizar (todas las solicitudes)</div>';
-      html += '<div style="font-size:11px;color:var(--dim)">de <span style="color:var(--text);font-weight:700">'+fmt(totalGlobalSolic)+'</span> solicitado</div>';
+      html += '<div style="font-size:11px;color:var(--dim)">de <span style="color:var(--text);font-weight:700">'+fmt(totalGlobalSolic)+'</span> pendiente'+( solsParcial.length?' <span style="color:var(--accent2)">(incl. saldos parciales)</span>':'')+'</div>';
       html += '</div>';
       html += '<div style="font-size:26px;font-weight:900;font-family:Bricolage Grotesque,sans-serif;color:var(--success)" id="total-global-aut">'+fmt(totalGlobalInic)+'</div>';
       html += '</div>';
