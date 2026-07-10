@@ -4726,13 +4726,16 @@ function renderCXPList() {
   var filtroGestion  = window._cxpFiltroGestion  || '';
   var filtroBusq     = (window._cxpBusq||'').toLowerCase();
 
+  var _modsC = (currentUser && currentUser.permisos && currentUser.permisos.finanzas && currentUser.permisos.finanzas.modulos) || {};
+  var _esCapturista = currentUser && currentUser.rol!=='admin' && currentUser.rol!=='director' && !_modsC.plan_cxc;
+
   var razonesDisp   = [...new Set(cxpData.map(function(x){return x.razon;}).filter(Boolean))].sort();
   var proyectosDisp = [...new Set(cxpData.map(function(x){return x.obra_nombre;}).filter(Boolean))].sort();
   var gestionDisp   = [...new Set(cxpData.map(function(x){return x.gestion;}).filter(Boolean))].sort();
 
   // Filtrar
   var itemsAll = cxpData.filter(function(x) {
-    // Capturistas solo ven las CxP asignadas a ellos
+    // No-directores/admin solo ven las CxP asignadas a ellos
     if(_esCapturista && currentUser && currentUser.nombre) {
       var miNombre = currentUser.nombre.trim().toUpperCase();
       if((x.gestion||'').trim().toUpperCase() !== miNombre) return false;
@@ -4750,8 +4753,6 @@ function renderCXPList() {
 
   var ss = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none;cursor:pointer';
   var html = '';
-  var _modsC = (currentUser && currentUser.permisos && currentUser.permisos.finanzas && currentUser.permisos.finanzas.modulos) || {};
-  var _esCapturista = currentUser && currentUser.rol!=='admin' && currentUser.rol!=='director' && !_modsC.plan_cxc;
 
   // KPIs — capturista solo ve total pendiente, sin montos de vencido ni pagado
   if(!_esCapturista) {
