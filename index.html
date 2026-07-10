@@ -5176,7 +5176,27 @@ async function saveCXP() {
     if(urlComprobante) payload.url_comprobante = urlComprobante;
     if(_editCXPId) {
       await db('PATCH','cuentas_por_pagar?id=eq.'+_editCXPId, payload);
-      showToast('✅ Cuenta por pagar actualizada');
+      // Sincronizar solicitud_pago_items PENDIENTES que referencian esta CxP
+      var _cxpActual   = cxpData.find(function(c){ return c.id===_editCXPId; });
+      var _pagadoParcial = _cxpActual ? (_cxpActual.pagado_parcial||0) : 0;
+      var _saldoSync   = Math.max(0, monto - _pagadoParcial);
+      var _itemsSync   = (solicitudItems||[]).filter(function(si){ return si.cxp_id===_editCXPId; })
+        .filter(function(si){
+          var sol = (solicitudesPago||[]).find(function(s){ return s.id===si.solicitud_id; });
+          return sol && sol.estatus==='PENDIENTE';
+        });
+      if(_itemsSync.length) {
+        await Promise.all(_itemsSync.map(function(si){
+          return db('PATCH','solicitud_pago_items?id=eq.'+si.id, {
+            proveedor: proveedor,
+            concepto:  payload.concepto||null,
+            monto:     _saldoSync
+          });
+        }));
+        showToast('✅ CxP actualizada y sincronizada en '+_itemsSync.length+' solicitud'+ (_itemsSync.length>1?'es':''));
+      } else {
+        showToast('✅ Cuenta por pagar actualizada');
+      }
     } else {
       payload.created_by = currentUser.nombre;
       await db('POST','cuentas_por_pagar', payload);
@@ -6261,35 +6281,4 @@ async function guardarPagoCXP() {
 
     var msg = nuevoSaldo<=0.01
       ? '✅ Pago completo — CxP liquidada'
-      : '✅ Pago de '+fmt(pago)+' registrado · Saldo: '+fmt(nuevoSaldo);
-    showToast(msg);
-    closeSheet('pago-cxp');
-    await loadPlaneacion(); // Solo recarga datos de Planeación
-    renderPlaneacion();
-
-  } catch(e) {
-    showToast('Error: '+e.message, true);
-  }
-  btn.textContent='✅ Registrar pago'; btn.disabled=false;
-}
-
-// ── Cerrar dropdowns al hacer click fuera ─────────────
-document.addEventListener('click', function(){
-  if(cfdiNominaDropdownOpen){
-    cfdiNominaDropdownOpen = false;
-    const panel = document.getElementById('nomina-trab-panel');
-    if(panel) panel.style.display='none';
-  }
-  if(typeof cfdiNominaDropdownSemanaOpen !== 'undefined' && cfdiNominaDropdownSemanaOpen){
-    cfdiNominaDropdownSemanaOpen = false;
-    const panel2 = document.getElementById('nomina-sem-panel');
-    if(panel2) panel2.style.display='none';
-  }
-});
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-</script>
-</body>
-</html>
+      : '✅ Pago de '+fmt
