@@ -4134,7 +4134,7 @@ function renderSolicitudesPago() {
     if(!expandida) {
       if(_estLabel==='PAGADA PARCIALMENTE') {
         var _saldoPend = _totalSolicitado - _totalAutorizado;
-        html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--success);font-weight:700">Pagado: '+fmt(_totalAutorizado)+'</span> · <span style="color:var(--warn);font-weight:700">Saldo: '+fmt(_saldoPend)+'</span></div>';
+        html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--danger);font-weight:700">'+fmt(totalSol)+'</span> · <span style="color:var(--success);font-weight:700">Pagado: '+fmt(_totalAutorizado)+'</span> · <span style="color:var(--warn);font-weight:700">Saldo: '+fmt(_saldoPend)+'</span></div>';
       } else {
         html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--danger);font-weight:700">'+fmt(totalSol)+'</span></div>';
       }
