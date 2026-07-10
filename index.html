@@ -4108,9 +4108,9 @@ function renderSolicitudesPago() {
     var pct = saldoTotal>0 ? Math.min(100,Math.round(totalSol/saldoTotal*100)) : 0;
     // Calcular etiqueta real para solicitudes revisadas
     var _estLabel = sol.estatus;
+    var _totalSolicitado = items.reduce(function(s,si){ return s+(si.monto||0); },0);
+    var _totalAutorizado = items.reduce(function(s,si){ return s+(si.monto_autorizado||0); },0);
     if(sol.estatus==='REVISADA') {
-      var _totalSolicitado = items.reduce(function(s,si){ return s+(si.monto||0); },0);
-      var _totalAutorizado = items.reduce(function(s,si){ return s+(si.monto_autorizado||0); },0);
       _estLabel = (_totalAutorizado >= _totalSolicitado && _totalSolicitado > 0) ? 'PAGADA' : 'PAGADA PARCIALMENTE';
     }
     var estColor = sol.estatus==='PENDIENTE'?'var(--warn)':sol.estatus==='REVISADA'?(_estLabel==='PAGADA'?'var(--success)':'var(--accent2)'):'var(--dim)';
@@ -4132,7 +4132,12 @@ function renderSolicitudesPago() {
     html += '<div style="flex:1;min-width:0">';
     html += '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+fmtDate(sol.fecha)+(sol.creado_por?' · <span style="color:var(--dim)">'+sol.creado_por+'</span>':'')+'</div>';
     if(!expandida) {
-      html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--danger);font-weight:700">'+fmt(totalSol)+'</span></div>';
+      if(_estLabel==='PAGADA PARCIALMENTE') {
+        var _saldoPend = _totalSolicitado - _totalAutorizado;
+        html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--success);font-weight:700">Pagado: '+fmt(_totalAutorizado)+'</span> · <span style="color:var(--warn);font-weight:700">Saldo: '+fmt(_saldoPend)+'</span></div>';
+      } else {
+        html += '<div style="font-size:11px;color:var(--dim);margin-top:1px">'+items.length+' pago'+(items.length!==1?'s':'')+' · <span style="color:var(--danger);font-weight:700">'+fmt(totalSol)+'</span></div>';
+      }
     } else if(sol.nota) {
       html += '<div style="font-size:11px;color:var(--accent2);margin-top:2px">📝 '+sol.nota+'</div>';
     }
