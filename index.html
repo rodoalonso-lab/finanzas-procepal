@@ -4379,7 +4379,7 @@ function editarSolicitud(solId) {
   var h = '';
   items.forEach(function(si) {
     var _pagado = (si.monto_autorizado||0) > 0;
-    h += '<div id="esol-item-'+si.id+'" style="border:1px solid '+(_pagado?'rgba(0,209,140,.3)':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:8px'+(_pagado?';opacity:.75':')+'">';
+    h += '<div id="esol-item-'+si.id+'" style="border:1px solid '+(_pagado?'rgba(0,209,140,.3)':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:8px'+(_pagado?';opacity:.75':'')+'">';
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
     h += '<span style="font-size:13px;font-weight:700;flex:1">'+(si.proveedor||'—')+'</span>';
     if(_pagado) {
