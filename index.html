@@ -4106,7 +4106,14 @@ function renderSolicitudesPago() {
     var rechazados = items.filter(function(si){ return si.aprobado===false; });
     var pendItems = items.filter(function(si){ return si.aprobado===null||si.aprobado===undefined; });
     var pct = saldoTotal>0 ? Math.min(100,Math.round(totalSol/saldoTotal*100)) : 0;
-    var estColor = sol.estatus==='PENDIENTE'?'var(--warn)':sol.estatus==='REVISADA'?'var(--success)':'var(--dim)';
+    // Calcular etiqueta real para solicitudes revisadas
+    var _estLabel = sol.estatus;
+    if(sol.estatus==='REVISADA') {
+      var _totalSolicitado = items.reduce(function(s,si){ return s+(si.monto||0); },0);
+      var _totalAutorizado = items.reduce(function(s,si){ return s+(si.monto_autorizado||0); },0);
+      _estLabel = (_totalAutorizado >= _totalSolicitado && _totalSolicitado > 0) ? 'PAGADA' : 'PAGADA PARCIALMENTE';
+    }
+    var estColor = sol.estatus==='PENDIENTE'?'var(--warn)':sol.estatus==='REVISADA'?(_estLabel==='PAGADA'?'var(--success)':'var(--accent2)'):'var(--dim)';
     var esCreador = currentUser && sol.creado_por === currentUser.nombre;
     var puedeReordenar = sol.estatus==='PENDIENTE' && (isDir || esCreador);
 
@@ -4133,7 +4140,7 @@ function renderSolicitudesPago() {
     if(expandida && sol.nota) { /* nota ya en subtítulo */ }
     html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
     if(expandida) html += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--danger)">'+fmt(totalSol)+'</span>';
-    html += '<span style="font-size:10px;background:'+estColor+'22;color:'+estColor+';border-radius:20px;padding:2px 8px;font-weight:700;white-space:nowrap">'+sol.estatus+'</span>';
+    html += '<span style="font-size:10px;background:'+estColor+'22;color:'+estColor+';border-radius:20px;padding:2px 8px;font-weight:700;white-space:nowrap">'+_estLabel+'</span>';
     if(sol.estatus==='PENDIENTE' && (isDir || esCreador)) {
       html += '<button onclick="event.stopPropagation();editarSolicitud(\''+sol.id+'\')" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:12px;padding:2px 7px;cursor:pointer;line-height:1" title="Editar">✏️</button>';
       html += '<button onclick="event.stopPropagation();eliminarSolicitud(\''+sol.id+'\')" style="background:none;border:1px solid rgba(255,77,106,.3);border-radius:6px;color:var(--danger);font-size:12px;padding:2px 7px;cursor:pointer;line-height:1" title="Eliminar">🗑️</button>';
@@ -4230,7 +4237,7 @@ function renderSolicitudesPago() {
       html += '<button onclick="aplicarPagosSolicitud(\''+sol.id+'\')" style="background:var(--success);border:none;border-radius:8px;padding:9px 18px;color:#070B14;font-size:12px;font-weight:800;cursor:pointer;font-family:Space Grotesk,sans-serif">💸 Aplicar pagos y cerrar</button>';
       html += '</div></div>';
     } else if(sol.estatus==='REVISADA') {
-      html += '<div style="padding:8px 0 0;font-size:11px;color:var(--dim);border-top:1px solid var(--border);margin-top:8px">Pagos aplicados a CxP ✓</div>';
+      html += '<div style="padding:8px 0 0;font-size:11px;color:'+estColor+';border-top:1px solid var(--border);margin-top:8px">'+(_estLabel==='PAGADA'?'✅ Pagado completo':'⚠️ Pagado parcialmente — quedan saldos pendientes')+'</div>';
     }
 
     html += '</div>'; // fin cuerpo expandido
@@ -6270,18 +6277,4 @@ async function guardarPagoCXP() {
 document.addEventListener('click', function(){
   if(cfdiNominaDropdownOpen){
     cfdiNominaDropdownOpen = false;
-    const panel = document.getElementById('nomina-trab-panel');
-    if(panel) panel.style.display = 'none';
-  }
-  if(cfdiNominaDropdownSemanaOpen){
-    cfdiNominaDropdownSemanaOpen = false;
-    const panel = document.getElementById('nomina-sem-panel');
-    if(panel) panel.style.display = 'none';
-  }
-});
-
-// ── PWA ───────────────────────────────────────────────
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-</script>
+    const panel = document.getElementById('nomi
