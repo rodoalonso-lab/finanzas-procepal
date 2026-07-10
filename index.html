@@ -4145,6 +4145,9 @@ function renderSolicitudesPago() {
       html += '<button onclick="event.stopPropagation();editarSolicitud(\''+sol.id+'\')" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:12px;padding:2px 7px;cursor:pointer;line-height:1" title="Editar">✏️</button>';
       html += '<button onclick="event.stopPropagation();eliminarSolicitud(\''+sol.id+'\')" style="background:none;border:1px solid rgba(255,77,106,.3);border-radius:6px;color:var(--danger);font-size:12px;padding:2px 7px;cursor:pointer;line-height:1" title="Eliminar">🗑️</button>';
     }
+    if(_estLabel==='PAGADA PARCIALMENTE' && (isDir || esCreador)) {
+      html += '<button onclick="event.stopPropagation();editarSolicitud(\''+sol.id+'\')" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:12px;padding:2px 7px;cursor:pointer;line-height:1" title="Editar pagos pendientes">✏️</button>';
+    }
     html += '</div>';
     html += '</div>'; // fin encabezado
 
@@ -4375,15 +4378,25 @@ function editarSolicitud(solId) {
   document.getElementById('esol-nota').value = sol.nota||'';
   var h = '';
   items.forEach(function(si) {
-    h += '<div id="esol-item-'+si.id+'" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
+    var _pagado = (si.monto_autorizado||0) > 0;
+    h += '<div id="esol-item-'+si.id+'" style="border:1px solid '+(_pagado?'rgba(0,209,140,.3)':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:8px'+(_pagado?';opacity:.75':')+'">';
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
     h += '<span style="font-size:13px;font-weight:700;flex:1">'+(si.proveedor||'—')+'</span>';
-    h += '<button onclick="eliminarItemSolicitud(\''+si.id+'\',\''+solId+'\')" style="background:none;border:none;color:var(--danger);font-size:15px;cursor:pointer;padding:2px 6px;line-height:1" title="Quitar">✕</button>';
+    if(_pagado) {
+      h += '<span style="font-size:10px;background:rgba(0,209,140,.15);color:var(--success);border-radius:20px;padding:2px 8px;font-weight:700">✓ Pagado</span>';
+    } else {
+      h += '<button onclick="eliminarItemSolicitud(\''+si.id+'\',\''+solId+'\')" style="background:none;border:none;color:var(--danger);font-size:15px;cursor:pointer;padding:2px 6px;line-height:1" title="Quitar">✕</button>';
+    }
     h += '</div>';
     if(si.concepto) h += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px">'+si.concepto+'</div>';
     h += '<div style="display:flex;align-items:center;gap:8px">';
-    h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Monto solicitado:</label>';
-    h += '<input type="number" id="esol-monto-'+si.id+'" value="'+(si.monto||0)+'" min="0" step="0.01" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none">';
+    if(_pagado) {
+      h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Pagado:</label>';
+      h += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--success)">'+fmt(si.monto_autorizado||0)+'</span>';
+    } else {
+      h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Monto pendiente:</label>';
+      h += '<input type="number" id="esol-monto-'+si.id+'" value="'+(si.monto||0)+'" min="0" step="0.01" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none">';
+    }
     h += '</div>';
     h += '</div>';
   });
@@ -4412,7 +4425,8 @@ async function guardarEdicionSolicitud() {
     await db('PATCH','solicitudes_pago?id=eq.'+solId, { nota: nota||null });
     sol.nota = nota||null;
     var items = solicitudItems.filter(function(si){ return si.solicitud_id===solId; });
-    await Promise.all(items.map(function(si){
+    var itemsEdit = items.filter(function(si){ return !((si.monto_autorizado||0)>0); });
+    await Promise.all(itemsEdit.map(function(si){
       var inp = document.getElementById('esol-monto-'+si.id);
       var nuevoMonto = inp ? (parseFloat(inp.value)||0) : (si.monto||0);
       si.monto = nuevoMonto;
