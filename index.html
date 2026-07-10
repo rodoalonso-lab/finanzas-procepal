@@ -6277,4 +6277,19 @@ async function guardarPagoCXP() {
 document.addEventListener('click', function(){
   if(cfdiNominaDropdownOpen){
     cfdiNominaDropdownOpen = false;
-    const panel = document.getElementById('nomi
+    const panel = document.getElementById('nomina-trab-panel');
+    if(panel) panel.style.display='none';
+  }
+  if(typeof cfdiNominaDropdownSemanaOpen !== 'undefined' && cfdiNominaDropdownSemanaOpen){
+    cfdiNominaDropdownSemanaOpen = false;
+    const panel2 = document.getElementById('nomina-sem-panel');
+    if(panel2) panel2.style.display='none';
+  }
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
