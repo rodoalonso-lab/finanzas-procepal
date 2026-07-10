@@ -4213,7 +4213,7 @@ function renderSolicitudesPago() {
       } else {
         // Vista resumen post-aprobación
         if((si.monto_autorizado||0)>0) {
-          html += '<div style="padding-left:18px;font-size:11px;color:var(--success);font-weight:700">✓ Pagado: '+fmt(si.monto_autorizado)+'</div>';
+          html += '<div style="padding-left:18px;font-size:11px;color:var(--success);font-weight:700">✓ Pagado: '+fmt(si.monto_autorizado)+(si.fecha_pago?' <span style="font-weight:400;color:var(--dim)">· '+fmtDate(si.fecha_pago)+'</span>':'')+'</div>';
         } else if(isDir && sol.estatus==='REVISADA' && si.cxp_id) {
           // Director puede aplicar pago pendiente directamente
           var saldoPend = (function(){
@@ -4293,7 +4293,8 @@ async function aplicarPagosSolicitud(solId) {
     });
     // Guardar montos autorizados en los items
     await Promise.all(ops.map(function(op){
-      return db('PATCH','solicitud_pago_items?id=eq.'+op.id,{monto_autorizado:op.monto_autorizado, aprobado: op.monto_autorizado>0});
+      var _fpago = op.monto_autorizado>0 ? new Date().toISOString() : null;
+      return db('PATCH','solicitud_pago_items?id=eq.'+op.id,{monto_autorizado:op.monto_autorizado, aprobado: op.monto_autorizado>0, fecha_pago: _fpago});
     }));
     // Aplicar abonos a las CxP
     var pagosAplicar = ops.filter(function(op){ return op.monto_autorizado>0 && op.cxp_id; });
@@ -4332,7 +4333,7 @@ async function aplicarPagoItemPendiente(siId, cxpId, solId) {
   try {
     showToast('Aplicando...');
     // Guardar monto en el item de la solicitud
-    await db('PATCH','solicitud_pago_items?id=eq.'+siId,{ monto_autorizado: monto, aprobado: true });
+    await db('PATCH','solicitud_pago_items?id=eq.'+siId,{ monto_autorizado: monto, aprobado: true, fecha_pago: new Date().toISOString() });
     // Aplicar abono a la CxP
     var cxp = cxpData.find(function(c){ return c.id===cxpId; });
     if(!cxp) {
@@ -4393,6 +4394,7 @@ function editarSolicitud(solId) {
     if(_pagado) {
       h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Pagado:</label>';
       h += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--success)">'+fmt(si.monto_autorizado||0)+'</span>';
+      if(si.fecha_pago) h += '<span style="font-size:10px;color:var(--dim);margin-left:6px">'+fmtDate(si.fecha_pago)+'</span>';
     } else {
       h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Solicitado:</label>';
       h += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--danger)">'+fmt(si.monto||0)+'</span>';
