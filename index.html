@@ -4394,8 +4394,8 @@ function editarSolicitud(solId) {
       h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Pagado:</label>';
       h += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--success)">'+fmt(si.monto_autorizado||0)+'</span>';
     } else {
-      h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Monto pendiente:</label>';
-      h += '<input type="number" id="esol-monto-'+si.id+'" value="'+(si.monto||0)+'" min="0" step="0.01" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none">';
+      h += '<label style="font-size:11px;color:var(--dim);white-space:nowrap">Solicitado:</label>';
+      h += '<span style="font-family:Bricolage Grotesque,sans-serif;font-size:13px;font-weight:800;color:var(--danger)">'+fmt(si.monto||0)+'</span>';
     }
     h += '</div>';
     h += '</div>';
@@ -4424,14 +4424,7 @@ async function guardarEdicionSolicitud() {
   try {
     await db('PATCH','solicitudes_pago?id=eq.'+solId, { nota: nota||null });
     sol.nota = nota||null;
-    var items = solicitudItems.filter(function(si){ return si.solicitud_id===solId; });
-    var itemsEdit = items.filter(function(si){ return !((si.monto_autorizado||0)>0); });
-    await Promise.all(itemsEdit.map(function(si){
-      var inp = document.getElementById('esol-monto-'+si.id);
-      var nuevoMonto = inp ? (parseFloat(inp.value)||0) : (si.monto||0);
-      si.monto = nuevoMonto;
-      return db('PATCH','solicitud_pago_items?id=eq.'+si.id, { monto: nuevoMonto });
-    }));
+    // Montos no editables — solo se permite quitar items no pagados desde aquí
     showToast('✅ Solicitud actualizada');
     closeSheet('editar-sol');
     renderPlaneacion();
@@ -6321,5 +6314,6 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
+<!-- build:2026-07-10 13:47:32 -->
 </body>
 </html>
