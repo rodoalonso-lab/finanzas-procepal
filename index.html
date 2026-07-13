@@ -5289,10 +5289,45 @@ async function saveCXP() {
   btn.textContent='Guardar'; btn.disabled=false;
 }
 
+async function _syncSolicitudByCXP(cxpId, montoPagadoTotal) {
+  // Cuando una CxP se paga (total o parcial), sincroniza los solicitud_pago_items
+  // y actualiza el estatus de la solicitud a REVISADA si era PENDIENTE
+  try {
+    var items = await db('GET','solicitud_pago_items?cxp_id=eq.'+cxpId);
+    if(!items||!items.length) return;
+    var solIds = [];
+    items.forEach(function(i){ if(solIds.indexOf(i.solicitud_id)<0) solIds.push(i.solicitud_id); });
+    for(var k=0;k<solIds.length;k++) {
+      var solId = solIds[k];
+      var solArr = await db('GET','solicitudes_pago?id=eq.'+solId+'&select=id,estatus');
+      if(!solArr||!solArr.length) continue;
+      if(solArr[0].estatus!=='PENDIENTE') continue;
+      var its = items.filter(function(i){ return i.solicitud_id===solId; });
+      for(var j=0;j<its.length;j++) {
+        var it = its[j];
+        var mo = it.monto||0;
+        var ma = (montoPagadoTotal===null) ? mo : Math.min(mo, montoPagadoTotal);
+        await db('PATCH','solicitud_pago_items?id=eq.'+it.id,{
+          monto_autorizado: ma,
+          aprobado: ma>=mo-0.01,
+          fecha_pago: ma>0 ? new Date().toISOString() : null
+        });
+      }
+      // Marcar solicitud como REVISADA (UI la mostrará como PAGADA o PAGADA PARCIALMENTE)
+      await db('PATCH','solicitudes_pago?id=eq.'+solId,{estatus:'REVISADA'});
+    }
+  } catch(e){ console.warn('_syncSolicitudByCXP error',e); }
+}
+
 async function marcarPagadoCXP(id) {
   if(!confirm('¿Marcar como pagado?')) return;
-  try{await db('PATCH','cuentas_por_pagar?id=eq.'+id,{estatus:'PAGADO'});showToast('✅ Marcado como pagado');await loadAll();renderPlaneacion();}
-  catch(e){showToast('Error',true);}
+  try {
+    await db('PATCH','cuentas_por_pagar?id=eq.'+id,{estatus:'PAGADO'});
+    await _syncSolicitudByCXP(id, null);
+    showToast('✅ Marcado como pagado');
+    await loadAll();
+    renderPlaneacion();
+  } catch(e){showToast('Error',true);}
 }
 
 async function deleteCXP(id) {
@@ -6353,6 +6388,7 @@ async function guardarPagoCXP() {
       pagado_parcial: nuevoPagado,
       estatus:        nuevoEstatus
     });
+    await _syncSolicitudByCXP(_pagoCXPId, nuevoPagado);
 
     var msg = nuevoSaldo<=0.01
       ? '✅ Pago completo — CxP liquidada'
