@@ -1084,7 +1084,28 @@ body.tema-claro .sub-nav{background:#FFFFFF}
       <div class="form-label">Notas</div>
       <input class="form-input" id="pcxp-notas" type="text" placeholder="Observaciones del pago">
     </div>
-    <button class="btn btn-accent" id="pcxp-save-btn" onclick="guardarPagoCXP()">✅ Registrar pago</button>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px">
+      <div class="form-label" style="margin-bottom:10px">&#x1F9FE; Comprobante Fiscal (CFDI)</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <div class="form-label" style="font-size:11px;color:var(--dim)">UUID / Folio Fiscal</div>
+        <input class="form-input" id="pcxp-cfdi-uuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="font-family:monospace;font-size:12px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group" style="margin-bottom:0">
+          <div class="form-label" style="font-size:11px;color:var(--dim)">Fecha CFDI</div>
+          <input class="form-input" id="pcxp-cfdi-fecha" type="date">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <div class="form-label" style="font-size:11px;color:var(--dim)">Monto CFDI</div>
+          <input class="form-input" id="pcxp-cfdi-monto" type="number" placeholder="0.00" step="0.01">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0;margin-top:8px">
+        <div class="form-label" style="font-size:11px;color:var(--dim)">RFC / Emisor</div>
+        <input class="form-input" id="pcxp-cfdi-emisor" type="text" placeholder="RFC o razon social del emisor">
+      </div>
+    </div>
+    <button class="btn btn-accent" id="pcxp-save-btn" onclick="guardarPagoCXP()">&#x2705; Registrar pago</button>
     <button class="btn btn-ghost" onclick="closeSheet('pago-cxp')">Cancelar</button>
   </div>
 </div>
@@ -5070,6 +5091,7 @@ function renderCXPList() {
       html += '<span style="font-size:13px;font-weight:700">'+(x.proveedor||'—')+'</span>';
       if(yaEnSol && !_cxpSelMode) html += '<span style="font-size:10px;background:rgba(99,102,241,.15);color:#a78bfa;border-radius:20px;padding:1px 6px;font-weight:700">📋 En solicitud</span>';
       if(x.requisicion_id) html += '<span style="font-size:10px;background:rgba(16,185,129,.15);color:#10B981;border-radius:20px;padding:1px 6px;font-weight:700">🔗 De Requisición</span>';
+      if(x.estatus==='PAGADO') html += x.cfdi_uuid ? '<span style="font-size:10px;background:rgba(16,185,129,.12);color:#10B981;border-radius:20px;padding:1px 6px;font-weight:700">&#x1F9FE; CFDI</span>' : '<span style="font-size:10px;background:rgba(239,68,68,.1);color:var(--danger);border-radius:20px;padding:1px 6px;font-weight:700">&#x26A0;&#xFE0F; Sin CFDI</span>';
       if(x.url_comprobante) html += '<span class="comprobante-icon" onclick="abrirComprobante(decodeURIComponent(this.dataset.url))" data-url="'+encodeURIComponent(x.url_comprobante)+'" title="Ver comprobante">📎</span>';
       if(x.razon) { var _rc2=razonColor(x.razon); html += '<span style="font-size:10px;font-weight:800;background:'+_rc2.bg+';border:1px solid '+_rc2.border+';color:'+_rc2.text+';border-radius:20px;padding:1px 6px">'+x.razon+'</span>'; }
       if(x.obra_nombre) html += '<span style="font-size:10px;color:var(--accent2)">🏗 '+x.obra_nombre+'</span>';
@@ -6614,10 +6636,16 @@ async function guardarPagoCXP() {
     var nuevoSaldo   = Math.max(0, Math.round((saldoActual-pago)*100)/100);
     var nuevoEstatus = nuevoSaldo<=0.01 ? 'PAGADO' : x.estatus;
 
-    await db('PATCH','cuentas_por_pagar?id=eq.'+_pagoCXPId, {
-      pagado_parcial: nuevoPagado,
-      estatus:        nuevoEstatus
-    });
+    var cfdiUuid   = (document.getElementById('pcxp-cfdi-uuid')||{}).value||null;
+    var cfdiMonto  = parseFloat((document.getElementById('pcxp-cfdi-monto')||{}).value)||null;
+    var cfdiEmisor = (document.getElementById('pcxp-cfdi-emisor')||{}).value||null;
+    var cfdiFecha  = (document.getElementById('pcxp-cfdi-fecha')||{}).value||null;
+    var patchData = { pagado_parcial: nuevoPagado, estatus: nuevoEstatus };
+    if(cfdiUuid)   patchData.cfdi_uuid   = cfdiUuid.trim();
+    if(cfdiMonto)  patchData.cfdi_monto  = cfdiMonto;
+    if(cfdiEmisor) patchData.cfdi_emisor = cfdiEmisor.trim();
+    if(cfdiFecha)  patchData.cfdi_fecha  = cfdiFecha;
+    await db('PATCH','cuentas_por_pagar?id=eq.'+_pagoCXPId, patchData);
     await _syncSolicitudByCXP(_pagoCXPId);
 
     var msg = nuevoSaldo<=0.01
