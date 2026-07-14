@@ -6481,7 +6481,7 @@ function renderCentroAlertas() {
       if(d.cliente)     detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Cliente</span><span style="font-size:11px;font-weight:600;color:var(--text)">'+d.cliente+'</span></div>';
       if(d.obra)        detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Obra</span><span style="font-size:11px;color:var(--text2)">'+d.obra+'</span></div>';
       if(d.obs)         detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Obs.</span><span style="font-size:11px;color:var(--text2)">'+d.obs+'</span></div>';
-      detHtml += '<div style="margin-top:4px"><button onclick="event.stopPropagation();('+a.irA.toString()+'')()" style="padding:5px 14px;border-radius:7px;border:1px solid '+bdrMap[a.tipo]+';background:'+cardMap[a.tipo]+';color:'+color+';font-size:11px;font-weight:700;cursor:pointer;font-family:\'Space Grotesk\',sans-serif">Ir a Planeación ›</button></div>';
+      detHtml += '<div style="margin-top:4px"><button onclick="event.stopPropagation();('+a.irA.toString()+'()" style="padding:5px 14px;border-radius:7px;border:1px solid '+bdrMap[a.tipo]+';background:'+cardMap[a.tipo]+';color:'+color+';font-size:11px;font-weight:700;cursor:pointer;font-family:\'Space Grotesk\',sans-serif">Ir a Planeación ›</button></div>';
       detHtml += '</div>';
     }
 
