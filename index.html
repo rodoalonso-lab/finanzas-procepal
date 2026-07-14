@@ -1701,7 +1701,7 @@ function renderDashboard() {
 
   if(Object.keys(porObra).length) {
     html += `<div class="section-title">Balance por Obra</div>`;
-    Object.values(porObra).sort((a,b)=>b.ing-a.ing).forEach(o=>{
+    Object.entries(porObra).sort(([,a],[,b])=>b.ing-a.ing).forEach(([obraId,o])=>{
       const balance    = o.ing - o.egr;
       const presBase   = o.pres;
       const ocAdi      = o.oc_adi||0;
@@ -1714,10 +1714,62 @@ function renderDashboard() {
       const balColor   = balance>=0?'var(--success)':'var(--danger)';
       const balSign    = balance>=0?'+':'-';
       const mostrarPres = presAjust>0;
+      const expandida  = _obraExpandidas.has(obraId);
+
+      // Movimientos cronológicos para detalle
+      const movObra = [];
+      ingresos.filter(m=>m.obra_id===obraId).forEach(m=>{
+        movObra.push({fecha:m.fecha||'', tipo:'ingreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
+      });
+      requisicionesData.filter(r=>r.obra_id===obraId).forEach(r=>{
+        movObra.push({fecha:r.fecha||'', tipo:'egreso', desc:r.folio||r.tipo||'Requisición', cat:'Requisición', monto:parseFloat(r.monto_cotizado)||0, extra:r.proveedor||null});
+      });
+      egresosManualData.filter(m=>m.obra_id===obraId).forEach(m=>{
+        movObra.push({fecha:m.fecha||'', tipo:'egreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
+      });
+      movObra.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+      let saldoCor = 0;
+      movObra.forEach(m=>{ saldoCor += m.tipo==='ingreso' ? m.monto : -m.monto; m.saldo = saldoCor; });
+
+      // Tabla de detalle cronológico
+      let detalleHtml = '';
+      if(expandida) {
+        detalleHtml += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">';
+        if(!movObra.length) {
+          detalleHtml += '<div style="text-align:center;color:var(--dim);font-size:12px;padding:10px">Sin movimientos registrados</div>';
+        } else {
+          detalleHtml += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+          detalleHtml += '<thead><tr style="color:var(--dim);text-transform:uppercase;font-size:9px;letter-spacing:.05em;border-bottom:1px solid var(--border)">';
+          detalleHtml += '<th style="text-align:left;padding:4px 6px;font-weight:600">Fecha</th>';
+          detalleHtml += '<th style="text-align:left;padding:4px 6px;font-weight:600">Descripción</th>';
+          detalleHtml += '<th style="text-align:right;padding:4px 6px;font-weight:600">Ingreso</th>';
+          detalleHtml += '<th style="text-align:right;padding:4px 6px;font-weight:600">Egreso</th>';
+          detalleHtml += '<th style="text-align:right;padding:4px 6px;font-weight:600">Saldo</th>';
+          detalleHtml += '</tr></thead><tbody>';
+          movObra.forEach((m,i)=>{
+            const bdr = i<movObra.length-1 ? 'border-bottom:1px solid var(--border)22' : '';
+            const sc  = m.saldo>=0 ? 'var(--success)' : 'var(--danger)';
+            const sSign = m.saldo>=0?'+':'-';
+            detalleHtml += `<tr style="${bdr}">`;
+            detalleHtml += `<td style="padding:5px 6px;color:var(--dim);white-space:nowrap;font-size:10px">${fmtDate(m.fecha)}</td>`;
+            detalleHtml += `<td style="padding:5px 6px;color:var(--text)">${m.desc}${m.extra?`<br><span style="font-size:10px;color:var(--dim)">${m.extra}</span>`:''}</td>`;
+            detalleHtml += `<td style="padding:5px 6px;text-align:right;color:var(--success);font-weight:700">${m.tipo==='ingreso'?fmt(m.monto):''}</td>`;
+            detalleHtml += `<td style="padding:5px 6px;text-align:right;color:var(--danger);font-weight:700">${m.tipo==='egreso'?fmt(m.monto):''}</td>`;
+            detalleHtml += `<td style="padding:5px 6px;text-align:right;font-weight:800;color:${sc};font-family:'Bricolage Grotesque',sans-serif">${sSign}${fmt(Math.abs(m.saldo))}</td>`;
+            detalleHtml += '</tr>';
+          });
+          detalleHtml += '</tbody></table>';
+        }
+        detalleHtml += '</div>';
+      }
+
       html += `<div class="card" style="margin-bottom:12px">
-        <!-- Encabezado -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div class="item-main" style="font-size:14px;font-weight:700">${o.nombre}</div>
+        <!-- Encabezado clicable -->
+        <div onclick="toggleObra('${obraId}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;user-select:none">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--dim);transition:transform .15s;display:inline-block;transform:rotate(${expandida?'0':'270'}deg)">▼</span>
+            <div class="item-main" style="font-size:14px;font-weight:700">${o.nombre}</div>
+          </div>
           <div style="text-align:right">
             <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;color:${balColor}">${balSign}${fmt(Math.abs(balance))}</div>
             <div style="font-size:9px;color:var(--dim);font-weight:500">BALANCE</div>
@@ -1750,6 +1802,7 @@ function renderDashboard() {
           <div style="font-size:10px;font-weight:700;color:${pctColor}">${pctStr}</div>
         </div>
         <div class="progress-wrap"><div class="progress-bar" style="width:${Math.max(pctRaw,pctRaw>0?0.5:0)}%;min-width:${pctRaw>0?'4px':'0'};background:${pctColor}"></div></div>`:''}
+        ${detalleHtml}
       </div>`;
     });
   }
