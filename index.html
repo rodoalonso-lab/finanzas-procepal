@@ -4329,6 +4329,12 @@ function renderSolicitudesPago() {
   return html;
 }
 
+function toggleNotif(nid) {
+  if(_notifExpandidas.has(nid)) _notifExpandidas.delete(nid);
+  else _notifExpandidas.add(nid);
+  renderDashboard();
+}
+
 function toggleObra(obraId) {
   if(_obraExpandidas.has(obraId)) _obraExpandidas.delete(obraId);
   else _obraExpandidas.add(obraId);
@@ -4681,6 +4687,7 @@ function logoutSW() {
 var _notifInterval   = null;
 var _notifIdsVistos  = new Set(); // ids de solicitudes ya notificadas
 var _obraExpandidas  = new Set(); // ids de obras con detalle cronológico
+var _notifExpandidas = new Set(); // ids de notificaciones expandidas
 var _solExpandidas   = new Set(); // ids de solicitudes con cuerpo visible
 var _solIniciadas    = new Set(); // evita re-inicializar estado de expansión
 var _notifPermOk     = false;
@@ -6373,61 +6380,125 @@ function abrirComprobante(url) {
 function renderCentroAlertas() {
   var alertas = [];
 
-  // CxP que vencen en las próximas 48 horas
+  // CxP próximas a vencer o vencidas
   cxpData.forEach(function(x) {
     if(x.estatus==='PAGADO') return;
     var d = diasParaVencer(x.fecha_vencimiento);
     if(d===null) return;
+    var saldo = Math.max(0,(x.monto||0)-(x.pagado_parcial||0));
     if(d<=2 && d>=0) {
-      alertas.push({tipo:'warn', icon:'📤',
+      alertas.push({
+        id: 'cxp-'+x.id, tipo:'warn', icon:'📤',
         titulo: (d===0?'Vence hoy':'Vence en '+d+' día'+(d>1?'s':''))+': '+x.proveedor,
         subtitulo: fmt(x.monto||0)+(x.obra_nombre?' · '+x.obra_nombre:'')+(x.gestion?' · 👤'+x.gestion:''),
-        accion: function(){ setTab('planeacion'); }
+        detalle: {
+          concepto:    x.concepto||null,
+          beneficiario:x.beneficiario||null,
+          gestion:     x.gestion||null,
+          vencimiento: x.fecha_vencimiento||null,
+          monto:       x.monto||0,
+          saldo:       saldo,
+          razon:       x.razon||null,
+          obs:         x.observaciones||null
+        },
+        irA: function(){ setTab('planeacion'); }
       });
     }
     if(d<0) {
-      alertas.push({tipo:'danger', icon:'🚨',
+      alertas.push({
+        id: 'cxp-'+x.id, tipo:'danger', icon:'🚨',
         titulo: 'CxP VENCIDA: '+x.proveedor+' ('+Math.abs(d)+'d)',
         subtitulo: fmt(x.monto||0)+(x.obra_nombre?' · '+x.obra_nombre:''),
-        accion: function(){ setTab('planeacion'); }
+        detalle: {
+          concepto:    x.concepto||null,
+          beneficiario:x.beneficiario||null,
+          gestion:     x.gestion||null,
+          vencimiento: x.fecha_vencimiento||null,
+          monto:       x.monto||0,
+          saldo:       saldo,
+          razon:       x.razon||null,
+          obs:         x.observaciones||null
+        },
+        irA: function(){ setTab('planeacion'); }
       });
     }
   });
 
-  // CxC retrasadas (vencimiento pasado y saldo > 0)
+  // CxC retrasadas
   cxcData.forEach(function(x) {
     var saldo = x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0));
     if(saldo<=0.01) return;
     var d = diasParaVencer(x.fecha_vencimiento);
     if(d!==null && d<0) {
-      alertas.push({tipo:'danger', icon:'💸',
+      alertas.push({
+        id: 'cxc-'+x.id, tipo:'danger', icon:'💸',
         titulo: 'CxC RETRASADA: '+x.cliente+' ('+Math.abs(d)+'d)',
         subtitulo: 'Saldo pendiente: '+fmt(saldo)+(x.obra_nombre?' · '+x.obra_nombre:''),
-        accion: function(){ setTab('planeacion'); window._cxcEstatus='pendiente'; }
+        detalle: {
+          cliente:     x.cliente||null,
+          obra:        x.obra_nombre||null,
+          vencimiento: x.fecha_vencimiento||null,
+          monto:       x.monto||0,
+          saldo:       saldo,
+          concepto:    x.concepto||null
+        },
+        irA: function(){ setTab('planeacion'); window._cxcEstatus='pendiente'; }
       });
     }
   });
 
   if(!alertas.length) return '';
 
+  var bgMap   = {danger:'var(--danger)',   warn:'var(--warn)'};
+  var cardMap = {danger:'rgba(255,77,106,.08)', warn:'rgba(244,168,74,.06)'};
+  var bdrMap  = {danger:'rgba(255,77,106,.25)', warn:'rgba(244,168,74,.2)'};
+  var txtMap  = {danger:'var(--danger)',   warn:'var(--warn)'};
+
   var html = '<div style="margin-bottom:14px">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-  html += '<div class="section-title" style="margin:0">🔔 Notificaciones del Día <span style="background:var(--danger);color:#fff;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px">'+alertas.length+'</span></div>';
+  html += '<div style="display:flex;align-items:center;margin-bottom:8px">';
+  html += '<div class="section-title" style="margin:0">🔔 Notificaciones del Día';
+  html += ' <span style="background:var(--danger);color:#fff;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px">'+alertas.length+'</span></div>';
   html += '</div>';
-
-  var bgMap   = {danger:'var(--danger)',warn:'var(--warn)'};
-  var cardMap = {danger:'rgba(255,77,106,.08)',warn:'rgba(244,168,74,.06)'};
-  var bdrMap  = {danger:'rgba(255,77,106,.25)',warn:'rgba(244,168,74,.2)'};
-
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
-  alertas.slice(0,6).forEach(function(a) {
-    html += '<div class="notif-item" onclick="'+a.accion.toString().replace(/"/g,"'")+'()" style="cursor:pointer;background:'+cardMap[a.tipo]+';border:1px solid '+bdrMap[a.tipo]+';border-radius:10px;padding:10px 12px;margin-bottom:0;border-bottom:none">';
-    html += '<div class="notif-dot" style="background:'+bgMap[a.tipo]+'"></div>';
-    html += '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:'+(a.tipo==='danger'?'var(--danger)':'var(--warn)')+'">'+a.icon+' '+a.titulo+'</div>';
-    html += '<div class="item-sub">'+a.subtitulo+'</div></div>';
-    html += '<span style="font-size:10px;color:var(--dim)">Ver ›</span>';
+
+  alertas.slice(0,10).forEach(function(a) {
+    var expanded = _notifExpandidas.has(a.id);
+    var nid = a.id.replace(/[^a-z0-9-]/gi,'_');
+    var color = txtMap[a.tipo];
+    var d = a.detalle;
+
+    // Detalle expandible
+    var detHtml = '';
+    if(expanded) {
+      detHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid '+bdrMap[a.tipo]+';display:flex;flex-direction:column;gap:6px">';
+      if(d.vencimiento) detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Vencimiento</span><span style="font-size:11px;font-weight:600;color:var(--text)">'+fmtDate(d.vencimiento)+'</span></div>';
+      if(d.monto)       detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Monto</span><span style="font-size:11px;font-weight:700;color:var(--danger)">'+fmt(d.monto)+'</span></div>';
+      if(d.saldo!=null&&d.saldo!==d.monto) detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Saldo</span><span style="font-size:11px;font-weight:700;color:var(--warn)">'+fmt(d.saldo)+'</span></div>';
+      if(d.concepto)    detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Concepto</span><span style="font-size:11px;color:var(--text2)">'+d.concepto+'</span></div>';
+      if(d.beneficiario)detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Beneficiario</span><span style="font-size:11px;font-family:monospace;font-weight:600;color:var(--text)">'+d.beneficiario+'</span></div>';
+      if(d.razon)       detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Razón</span><span style="font-size:11px;font-weight:700;color:var(--accent)">'+d.razon+'</span></div>';
+      if(d.gestion)     detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Gestión</span><span style="font-size:11px;color:var(--text2)">👤 '+d.gestion+'</span></div>';
+      if(d.cliente)     detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Cliente</span><span style="font-size:11px;font-weight:600;color:var(--text)">'+d.cliente+'</span></div>';
+      if(d.obra)        detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Obra</span><span style="font-size:11px;color:var(--text2)">'+d.obra+'</span></div>';
+      if(d.obs)         detHtml += '<div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--dim);min-width:90px">Obs.</span><span style="font-size:11px;color:var(--text2)">'+d.obs+'</span></div>';
+      detHtml += '<div style="margin-top:4px"><button onclick="event.stopPropagation();('+a.irA.toString()+'')()" style="padding:5px 14px;border-radius:7px;border:1px solid '+bdrMap[a.tipo]+';background:'+cardMap[a.tipo]+';color:'+color+';font-size:11px;font-weight:700;cursor:pointer;font-family:\'Space Grotesk\',sans-serif">Ir a Planeación ›</button></div>';
+      detHtml += '</div>';
+    }
+
+    html += '<div style="background:'+cardMap[a.tipo]+';border:1px solid '+bdrMap[a.tipo]+';border-radius:10px;padding:10px 12px">';
+    // Header clicable
+    html += '<div onclick="toggleNotif(\''+a.id+'\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none">';
+    html += '<div class="notif-dot" style="background:'+bgMap[a.tipo]+';flex-shrink:0"></div>';
+    html += '<div style="flex:1">';
+    html += '<div style="font-size:12px;font-weight:700;color:'+color+'">'+a.icon+' '+a.titulo+'</div>';
+    if(!expanded) html += '<div class="item-sub" style="margin-top:2px">'+a.subtitulo+'</div>';
+    html += '</div>';
+    html += '<span style="font-size:10px;color:var(--dim);transition:transform .15s;display:inline-block;transform:rotate('+(expanded?'0':'270')+'deg)">▼</span>';
+    html += '</div>';
+    html += detHtml;
     html += '</div>';
   });
+
   html += '</div></div>';
   return html;
 }
