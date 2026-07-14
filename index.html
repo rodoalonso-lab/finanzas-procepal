@@ -5069,6 +5069,7 @@ function renderCXPList() {
       html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
       html += '<span style="font-size:13px;font-weight:700">'+(x.proveedor||'—')+'</span>';
       if(yaEnSol && !_cxpSelMode) html += '<span style="font-size:10px;background:rgba(99,102,241,.15);color:#a78bfa;border-radius:20px;padding:1px 6px;font-weight:700">📋 En solicitud</span>';
+      if(x.requisicion_id) html += '<span style="font-size:10px;background:rgba(16,185,129,.15);color:#10B981;border-radius:20px;padding:1px 6px;font-weight:700">🔗 De Requisición</span>';
       if(x.url_comprobante) html += '<span class="comprobante-icon" onclick="abrirComprobante(decodeURIComponent(this.dataset.url))" data-url="'+encodeURIComponent(x.url_comprobante)+'" title="Ver comprobante">📎</span>';
       if(x.razon) { var _rc2=razonColor(x.razon); html += '<span style="font-size:10px;font-weight:800;background:'+_rc2.bg+';border:1px solid '+_rc2.border+';color:'+_rc2.text+';border-radius:20px;padding:1px 6px">'+x.razon+'</span>'; }
       if(x.obra_nombre) html += '<span style="font-size:10px;color:var(--accent2)">🏗 '+x.obra_nombre+'</span>';
