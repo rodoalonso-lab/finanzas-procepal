@@ -4329,6 +4329,11 @@ function renderSolicitudesPago() {
   return html;
 }
 
+function toggleSeccionNotif() {
+  _notifSeccionPlegada = !_notifSeccionPlegada;
+  renderDashboard();
+}
+
 function toggleNotif(nid) {
   if(_notifExpandidas.has(nid)) _notifExpandidas.delete(nid);
   else _notifExpandidas.add(nid);
@@ -4687,7 +4692,8 @@ function logoutSW() {
 var _notifInterval   = null;
 var _notifIdsVistos  = new Set(); // ids de solicitudes ya notificadas
 var _obraExpandidas  = new Set(); // ids de obras con detalle cronológico
-var _notifExpandidas = new Set(); // ids de notificaciones expandidas
+var _notifExpandidas    = new Set(); // ids de notificaciones expandidas
+var _notifSeccionPlegada = false;     // sección notificaciones colapsada
 var _solExpandidas   = new Set(); // ids de solicitudes con cuerpo visible
 var _solIniciadas    = new Set(); // evita re-inicializar estado de expansión
 var _notifPermOk     = false;
@@ -6454,11 +6460,14 @@ function renderCentroAlertas() {
   var bdrMap  = {danger:'rgba(255,77,106,.25)', warn:'rgba(244,168,74,.2)'};
   var txtMap  = {danger:'var(--danger)',   warn:'var(--warn)'};
 
+  var plegada = _notifSeccionPlegada;
   var html = '<div style="margin-bottom:14px">';
-  html += '<div style="display:flex;align-items:center;margin-bottom:8px">';
+  html += '<div onclick="toggleSeccionNotif()" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(plegada?'0':'8px')+';cursor:pointer;user-select:none">';
   html += '<div class="section-title" style="margin:0">🔔 Notificaciones del Día';
   html += ' <span style="background:var(--danger);color:#fff;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px">'+alertas.length+'</span></div>';
+  html += '<span style="font-size:11px;color:var(--dim);transform:rotate('+(plegada?'0':'180')+'deg);display:inline-block;transition:transform .2s">▼</span>';
   html += '</div>';
+  if(plegada) { html += '</div>'; return html; }
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
 
   alertas.slice(0,10).forEach(function(a) {
