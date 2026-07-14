@@ -4325,6 +4325,12 @@ function renderSolicitudesPago() {
   return html;
 }
 
+function toggleObra(obraId) {
+  if(_obraExpandidas.has(obraId)) _obraExpandidas.delete(obraId);
+  else _obraExpandidas.add(obraId);
+  renderDashboard();
+}
+
 function toggleSol(solId) {
   if(_solExpandidas.has(solId)) _solExpandidas.delete(solId);
   else _solExpandidas.add(solId);
