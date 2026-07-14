@@ -4419,12 +4419,13 @@ function imprimirObra(obraId) {
     '<th>Fecha</th><th>Descripción</th><th>Categoría</th>'+
     '<th class="tr">Ingreso</th><th class="tr">Egreso</th><th class="tr">Saldo</th>'+
     '</tr></thead><tbody>'+rows+'</tbody>'+
-    '<tfoot>'+presRow+
+    '<tfoot>'+
     '<tr><td colspan="3" style="padding:8px;font-weight:700">TOTALES</td>'+
     '<td style="padding:8px;text-align:right;font-weight:700;color:#0d7a5f">'+fmtP(totalIng)+'</td>'+
     '<td style="padding:8px;text-align:right;font-weight:700;color:#c0392b">'+fmtP(totalEgr)+'</td>'+
     '<td style="padding:8px;text-align:right;font-weight:800;color:'+balColor+'">'+balSign+fmtP(Math.abs(balFinal))+'</td>'+
     '</tr></tfoot></table>'+
+    presRow+
     '<div class="footer">Procepal · Sistema de Gestión Financiera · '+today+'</div>'+
     '<script>window.onload=function(){window.print()}<\/script>'+
     '</body></html>');
