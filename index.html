@@ -3879,6 +3879,141 @@ var _ocFiltroObra = '';
 var _ocFiltroTipo = '';
 var _ocFiltroEst  = '';
 
+
+// ── EJECUCIÓN PRESUPUESTAL ────────────────────────────────────────────
+var _ejFiltroObra = '';
+
+function renderEjecucion() {
+  var mc = document.getElementById('main-content');
+  if(!mc) return;
+
+  // ─── filtro obra ───
+  var obras = [];
+  var vistos = {};
+  ejecucionData.forEach(function(r){ if(r.obra_id && !vistos[r.obra_id]){ vistos[r.obra_id]=true; obras.push({id:r.obra_id,nombre:r.obra}); } });
+
+  var ss = 'padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-family:Space Grotesk,sans-serif';
+  var h = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">';
+  h += '<span style="font-weight:700;font-size:15px;color:var(--text)">📊 Ejecución Presupuestal</span>';
+  h += '<select style="'+ss+';min-width:160px" onchange="window._ejFiltroObra=this.value;renderEjecucion()">';
+  h += '<option value="">— Todas las obras —</option>';
+  obras.forEach(function(o){
+    h += '<option value="'+o.id+'" '+(_ejFiltroObra===o.id?'selected':'')+'>'+o.nombre+'</option>';
+  });
+  h += '</select>';
+  h += '</div>';
+
+  // ─── tabla resumen por obra ───
+  var filas = ejecucionData.filter(function(r){ return !_ejFiltroObra || r.obra_id===_ejFiltroObra; });
+
+  if(!filas.length) {
+    h += '<div style="color:var(--text-muted);text-align:center;padding:40px">Sin datos de ejecución presupuestal.<br><small>Se llena automáticamente al capturar APU en MetalTek y al registrar CxP en Planeación.</small></div>';
+    mc.innerHTML = h;
+    return;
+  }
+
+  function fmt(n){ return '$'+(parseFloat(n)||0).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+  function pct(n){
+    if(n===null||n===undefined) return '<span style="color:var(--text-muted)">—</span>';
+    var v = parseFloat(n);
+    var color = v>100?'var(--danger)':v>80?'var(--warning,#F59E0B)':'var(--success,#10B981)';
+    return '<span style="color:'+color+';font-weight:700">'+v+'%</span>';
+  }
+  function bar(v){
+    var val = Math.min(parseFloat(v)||0, 150);
+    var color = val>100?'var(--danger)':val>80?'var(--warning,#F59E0B)':'var(--success,#10B981)';
+    return '<div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:80px">'
+      +'<div style="height:6px;border-radius:3px;background:'+color+';width:'+Math.min(val,100)+'%"></div></div>';
+  }
+
+  var thS = 'padding:8px 10px;text-align:right;font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:2px solid var(--border);white-space:nowrap';
+  var thL = thS.replace('text-align:right','text-align:left');
+  h += '<div style="overflow-x:auto">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  h += '<thead><tr>'
+    +'<th style="'+thL+'">OBRA</th>'
+    +'<th style="'+thL+'">PRESUPUESTO</th>'
+    +'<th style="'+thS+'">PRESUPUESTO APU</th>'
+    +'<th style="'+thS+'">COMPROMETIDO</th>'
+    +'<th style="'+thS+'">PAGADO</th>'
+    +'<th style="'+thS+'">DISPONIBLE</th>'
+    +'<th style="'+thS+'">% EJERCIDO</th>'
+    +'</tr></thead><tbody>';
+
+  var tdS = 'padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);vertical-align:middle';
+  var tdL = tdS.replace('text-align:right','text-align:left');
+
+  // agrupar por obra
+  var obraMap = {};
+  filas.forEach(function(r){
+    if(!obraMap[r.obra_id]) obraMap[r.obra_id] = {
+      obra:r.obra, presupuesto_nombre:r.presupuesto_nombre||'—',
+      presupuesto_total:r.presupuesto_total, presupuesto_directo:r.presupuesto_directo,
+      comprometido:r.comprometido, pagado:r.pagado,
+      disponible:r.disponible, pct_ejercido:r.pct_ejercido
+    };
+  });
+
+  Object.values(obraMap).forEach(function(o){
+    var tieneAPU = parseFloat(o.presupuesto_total||0) > 0;
+    h += '<tr>';
+    h += '<td style="'+tdL+';font-weight:600">'+o.obra+'</td>';
+    h += '<td style="'+tdL+';font-size:12px;color:var(--text-muted)">'+o.presupuesto_nombre+'</td>';
+    h += '<td style="'+tdS+'">'+(tieneAPU?fmt(o.presupuesto_total):'<span style="color:var(--text-muted)">Sin APU</span>')+'</td>';
+    h += '<td style="'+tdS+'">'+fmt(o.comprometido)+'</td>';
+    h += '<td style="'+tdS+'">'+fmt(o.pagado)+'</td>';
+    h += '<td style="'+tdS+'">'+(tieneAPU?fmt(o.disponible):'—')+'</td>';
+    h += '<td style="'+tdS+';min-width:110px">'+(tieneAPU?bar(o.pct_ejercido)+' '+pct(o.pct_ejercido):'<span style="color:var(--text-muted)">—</span>')+'</td>';
+    h += '</tr>';
+  });
+
+  h += '</tbody></table></div>';
+
+  // ─── detalle por partida (si hay filtro de obra o hay datos APU) ───
+  var detalle = ejecucionDetalleData.filter(function(r){ return !_ejFiltroObra || r.obra_id===_ejFiltroObra; });
+  if(detalle.length) {
+    var partLabels = {
+      MATERIAL:'🧱 Material', MANO_DE_OBRA:'👷 Mano de Obra',
+      EQUIPO:'⚙️ Equipo', SUBCONTRATO:'🤝 Subcontrato',
+      INDIRECTO:'📋 Indirecto', OTRO:'📦 Otro', SIN_CLASIFICAR:'❓ Sin clasificar'
+    };
+    h += '<h3 style="margin:24px 0 10px;font-size:14px;color:var(--text)">Detalle por Partida</h3>';
+    h += '<div style="overflow-x:auto">';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+    h += '<thead><tr>'
+      +(_ejFiltroObra?'':'<th style="'+thL+'">OBRA</th>')
+      +'<th style="'+thL+'">PARTIDA</th>'
+      +'<th style="'+thS+'">PRESUPUESTO APU</th>'
+      +'<th style="'+thS+'">COMPROMETIDO</th>'
+      +'<th style="'+thS+'">PAGADO</th>'
+      +'<th style="'+thS+'">DISPONIBLE</th>'
+      +'<th style="'+thS+'">% EJERCIDO</th>'
+      +'</tr></thead><tbody>';
+
+    var lastObra = '';
+    detalle.forEach(function(r){
+      var tieneAPU = parseFloat(r.presupuesto||0)>0;
+      h += '<tr>';
+      if(!_ejFiltroObra) {
+        var obraLabel = r.obra!==lastObra?r.obra:'';
+        lastObra = r.obra;
+        h += '<td style="'+tdL+';font-weight:600">'+obraLabel+'</td>';
+      }
+      h += '<td style="'+tdL+'">'+( partLabels[r.partida]||r.partida)+'</td>';
+      h += '<td style="'+tdS+'">'+(tieneAPU?fmt(r.presupuesto):'<span style="color:var(--text-muted)">—</span>')+'</td>';
+      h += '<td style="'+tdS+'">'+fmt(r.comprometido)+'</td>';
+      h += '<td style="'+tdS+'">'+fmt(r.pagado)+'</td>';
+      h += '<td style="'+tdS+'">'+(tieneAPU?fmt(r.disponible):'—')+'</td>';
+      h += '<td style="'+tdS+';min-width:110px">'+(tieneAPU?bar(r.pct_ejercido)+' '+pct(r.pct_ejercido):'<span style="color:var(--text-muted)">—</span>')+'</td>';
+      h += '</tr>';
+    });
+
+    h += '</tbody></table></div>';
+  }
+
+  mc.innerHTML = h;
+}
+
 function renderOrdenesCambio() {
   const el = document.getElementById('main-content');
   if(!el) return;
