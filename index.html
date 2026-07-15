@@ -580,6 +580,7 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     <button class="sub-tab" onclick="setTab('egresos')" id="tab-egresos">📤 Egresos</button>
     <button class="sub-tab" onclick="setTab('ingresos')" id="tab-ingresos">📥 Ingresos</button>
     <button class="sub-tab" onclick="setTab('cambios')" id="tab-cambios">🔄 Órdenes de Cambio</button>
+    <button class="sub-tab" onclick="setTab('ejecucion')" id="tab-ejecucion">📊 Ejecución</button>
   </div>
   <!-- SUB-NAV: Fiscalización -->
   <div class="sub-nav" id="subnav-fiscalizacion" style="display:none">
@@ -1374,7 +1375,7 @@ async function loadCatalogos() {
 //          movimientos (Finanzas — solo ingresos manuales)
 async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_movIng, _movEgr, _requis, _oc] = await Promise.all([
+  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet] = await Promise.all([
     dbSafe('GET',
       'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
       null, 'movimientos_ingreso'),
@@ -1386,11 +1387,15 @@ async function loadControlPresupuestal() {
       'requisiciones?estado=eq.autorizada&order=fecha.desc&limit=' + lim.requisiciones,
       null, 'requisiciones'),
     dbSafe('GET', 'ordenes_cambio?order=fecha.desc', null, 'ordenes_cambio'),
+    dbSafe('GET', 'v_ejecucion_por_obra', null, 'ejecucion_obra'),
+    dbSafe('GET', 'v_ejecucion_presupuestal', null, 'ejecucion_det'),
   ]);
   movimientos       = _movIng;
   egresosManualData = _movEgr;
   requisicionesData = _requis;
   ordenesCambio     = _oc;
+  ejecucionData     = _ejec;
+  ejecucionDetalleData = _ejecDet;
   console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas');
 }
 
@@ -1449,7 +1454,7 @@ async function loadAll() {
 
 // ── Recarga selectiva por módulo activo ─────────────────────────────
 async function recargarModuloActivo() {
-  var GRUPO_PRES = ['dashboard','egresos','ingresos','cambios'];
+  var GRUPO_PRES = ['dashboard','egresos','ingresos','cambios','ejecucion'];
   var GRUPO_FISC = ['cfdi','conciliacion','cuentas','reportes'];
   if(GRUPO_PRES.includes(currentTab))      { await loadCatalogos(); await loadControlPresupuestal(); }
   else if(GRUPO_FISC.includes(currentTab)) { await loadCatalogos(); await loadFiscalizacion(); }
@@ -1476,7 +1481,7 @@ function setGrupo(grupo) {
     if(btnP) btnP.classList.add('active');
     _grupoActivo = 'presupuestal';
     // Auto-seleccionar el primer sub-tab
-    if(currentTab !== 'dashboard' && currentTab !== 'egresos' && currentTab !== 'ingresos') {
+    if(!['dashboard','egresos','ingresos','cambios','ejecucion'].includes(currentTab)) {
       setTab('dashboard');
     } else {
       // Remarcar el sub-tab actual
@@ -1503,7 +1508,7 @@ function setTab(tab) {
   currentTab = tab;
 
   // Determinar a qué grupo pertenece y mostrar su sub-nav
-  var GRUPO_PRES = ['dashboard','egresos','ingresos','cambios'];
+  var GRUPO_PRES = ['dashboard','egresos','ingresos','cambios','ejecucion'];
   var GRUPO_FISC = ['cfdi','conciliacion','cuentas','reportes'];
 
   var subnavP = document.getElementById('subnav-presupuestal');
@@ -1562,7 +1567,8 @@ function setTab(tab) {
     conciliacion: renderConciliacion,
     reportes:     renderReportes,
     planeacion:   renderPlaneacion,
-    cambios:      renderOrdenesCambio
+    cambios:      renderOrdenesCambio,
+    ejecucion:    renderEjecucion
   };
   if(renders[tab]) renders[tab]();
 }
@@ -3080,6 +3086,8 @@ let movBancariosDB = [];
 let requisicionesData = []; // Solo lectura desde MetalTek — NO se modifica desde Finanzas
 let egresosManualData = []; // Egresos manuales registrados en Finanzas (movimientos tipo=egreso)
 let cxpData = [];       // cuentas por pagar
+let ejecucionData = []; // v_ejecucion_por_obra
+let ejecucionDetalleData = []; // v_ejecucion_presupuestal
 let cxcData = [];       // cuentas por cobrar
 let deudaData = [];     // deuda financiera
 let _planTab = 'cxp';  // sub-tab activo
