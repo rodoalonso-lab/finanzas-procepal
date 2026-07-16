@@ -3811,10 +3811,18 @@ async function renderSolicitudesSAT() {
     panel.innerHTML = html;
 
     // Auto-polling cada 30s si hay solicitudes activas
+    // También dispara sat-verificar silenciosamente para acelerar la descarga
     if(hayActivas) {
       _satPollTimer = setInterval(async () => {
         const panelChk = document.getElementById('sat-solicitudes-panel');
         if(!panelChk) { clearInterval(_satPollTimer); return; }
+        try {
+          await fetch(SUPABASE_URL + '/functions/v1/sat-verificar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_KEY },
+            body: '{}'
+          });
+        } catch(e) { /* silencioso */ }
         await renderSolicitudesSAT();
       }, 30000);
     }
