@@ -2561,10 +2561,14 @@ function renderCFDIFacturas() {
     .sort((a,b)=>b[1].total - a[1].total);
 
   let html = `
-  <div class="cfdi-subtabs" style="display:flex;gap:6px;margin-bottom:14px">
-    <button onclick="setCfdiSubTab('facturas')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:var(--accent);color:#fff">📄 Facturas</button>
-    <button onclick="setCfdiSubTab('nomina')" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:var(--text)">👷 Nómina</button>
-  </div>`;
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div class="cfdi-subtabs" style="display:flex;gap:6px">
+      <button onclick="setCfdiSubTab('facturas')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:var(--accent);color:#fff">📄 Facturas</button>
+      <button onclick="setCfdiSubTab('nomina')" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:var(--text)">👷 Nómina</button>
+    </div>
+    <button onclick="openSatImport()" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(77,142,255,.4);cursor:pointer;font-size:12px;font-weight:600;background:rgba(77,142,255,.1);color:var(--accent2)">🛰️ Importar del SAT</button>
+  </div>
+  <div id="sat-solicitudes-panel" style="margin-bottom:12px"></div>`;
 
   // Aviso si se excluyeron nóminas
   if(nominasExcluidas > 0) {
@@ -2706,6 +2710,7 @@ function renderCFDIFacturas() {
   html += `<div class="section-title">Facturas Emitidas</div><div class="card">${renderCFDIList(facturasEmitidas,'emitidos')}</div>`;
   html += `<div class="section-title">Facturas Recibidas</div><div class="card">${renderCFDIList(cfdiRecibidos,'recibidos')}</div>`;
   document.getElementById('main-content').innerHTML = html;
+  renderSolicitudesSAT();
   // Aplicar indeterminate
   const chkAll = document.getElementById('cfdi-chk-all');
   if(chkAll) chkAll.indeterminate = cfdiSeleccion.size>0 && !todosSelec;
