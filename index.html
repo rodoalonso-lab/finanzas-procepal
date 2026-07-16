@@ -2725,8 +2725,23 @@ function renderCFDIFacturas() {
     return rows;
   };
 
-  html += `<div class="section-title">Facturas Emitidas</div><div class="card">${renderCFDIList(facturasEmitidas,'emitidos')}</div>`;
-  html += `<div class="section-title">Facturas Recibidas</div><div class="card">${renderCFDIList(cfdiRecibidos,'recibidos')}</div>`;
+  // Sección Emitidas colapsable
+  html += `<div style="margin-bottom:4px">
+    <div onclick="toggleCfdiSec('emitidas')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:${_cfdiSec.emitidas?'var(--r) var(--r) 0 0':'var(--r)'};user-select:none">
+      <span class="section-title" style="margin:0;border:none;padding:0;font-size:11px">📤 FACTURAS EMITIDAS <span style="font-weight:400;color:var(--dim)">(${facturasEmitidas.length})</span></span>
+      <span style="font-size:11px;color:var(--dim)">${_cfdiSec.emitidas?'▲':'▼'}</span>
+    </div>
+    ${_cfdiSec.emitidas ? `<div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none">${renderCFDIList(facturasEmitidas,'emitidos')}</div>` : ''}
+  </div>`;
+
+  // Sección Recibidas colapsable
+  html += `<div style="margin-bottom:4px">
+    <div onclick="toggleCfdiSec('recibidas')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:${_cfdiSec.recibidas?'var(--r) var(--r) 0 0':'var(--r)'};user-select:none">
+      <span class="section-title" style="margin:0;border:none;padding:0;font-size:11px">📥 FACTURAS RECIBIDAS <span style="font-weight:400;color:var(--dim)">(${cfdiRecibidos.length})</span></span>
+      <span style="font-size:11px;color:var(--dim)">${_cfdiSec.recibidas?'▲':'▼'}</span>
+    </div>
+    ${_cfdiSec.recibidas ? `<div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none">${renderCFDIList(cfdiRecibidos,'recibidos')}</div>` : ''}
+  </div>`;
   document.getElementById('main-content').innerHTML = html;
   renderSolicitudesSAT();
   // Aplicar indeterminate
@@ -3875,8 +3890,10 @@ async function renderSolicitudesSAT() {
 
     if(hayActivas) {
       _satPollTimer = setInterval(async () => {
-        const panelChk = document.getElementById('sat-solicitudes-panel');
-        if(!panelChk) { clearInterval(_satPollTimer); return; }
+        // Si el panel ya no existe en el DOM (cambio de tab), cancelar
+        if(!document.getElementById('sat-solicitudes-panel')) {
+          clearInterval(_satPollTimer); _satPollTimer = null; return;
+        }
         try {
           await fetch(SUPABASE_URL + '/functions/v1/sat-verificar', {
             method: 'POST',
@@ -3885,7 +3902,7 @@ async function renderSolicitudesSAT() {
           });
         } catch(e) { /* silencioso */ }
         await renderSolicitudesSAT();
-      }, 30000);
+      }, 15000); // cada 15s cuando hay activas
     }
   } catch(e) { console.error('[SAT panel]', e); panel.innerHTML=''; }
 }
