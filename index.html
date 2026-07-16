@@ -3883,7 +3883,7 @@ async function pollSatVerificar(solicitudId) {
       showToast('✅ ' + (r.cfdi_importados||0) + ' CFDIs importados del SAT');
       const [e, rec] = await Promise.all([
         dbSafe('GET','cfdi_emitidos?order=fecha.desc&limit=300', null, 'cfdi_emitidos'),
-        dbSafe('GET','cfdi_recibidos?order=fecha.desc&limit=50', null, 'cfdi_recibidos')
+        dbSafe('GET','cfdi_recibidos?order=fecha.desc&limit=1000', null, 'cfdi_recibidos')
       ]);
       cfdiEmitidos = e; cfdiRecibidos = rec;
       renderCFDI();
