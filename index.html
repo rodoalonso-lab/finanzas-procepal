@@ -3853,7 +3853,7 @@ async function renderSolicitudesSAT() {
 
       html += `
         <div style="border-bottom:1px solid var(--border2)">
-          <div class="sat-row-hdr" onclick="_satExpanded.has('${s.id}')?_satExpanded.delete('${s.id}')&&(_satExpanded.add('_manual_${s.id}')):((_satExpanded.add('${s.id}'),_satExpanded.add('_manual_${s.id}')));toggleSatRow('${s.id}')">
+          <div class="sat-row-hdr" onclick="toggleSatRow('${s.id}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;transition:background .15s">
             <span id="sat-arrow-${s.id}" style="font-size:9px;color:var(--dim);min-width:10px">${expanded?'▲':'▼'}</span>
             <span style="font-size:12px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tipoLabel} · ${desde} → ${hasta}</span>
             <span style="font-size:10px;color:var(--dim);white-space:nowrap;margin-right:6px">${tiempo}</span>
