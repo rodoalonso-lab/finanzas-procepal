@@ -3644,6 +3644,148 @@ function exportarMovimientosExcel() {
   XLSX.writeFile(wb2,`movimientos_${nombre}_procepal.xlsx`);
 }
 
+// ── SAT: Importación automática ──────────────────────
+const SAT_FN_URL = 'https://pviiuaukqvrdyttwulcw.supabase.co/functions/v1';
+const SAT_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2aWl1YXVrcXZyZHl0dHd1bGN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTU0MzMsImV4cCI6MjA5NTA3MTQzM30.mKJ2z17zBkz0zc18itgEnJAk8ZuQ6nT3PlAvXyYRip8';
+
+let _satCerB64 = null, _satKeyB64 = null;
+
+function satFileSelected(input, tipo) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result)));
+    if(tipo === 'cer') {
+      _satCerB64 = b64;
+      document.getElementById('sat-cer-label').textContent = '✅ ' + file.name;
+      document.getElementById('sat-cer-zone').style.borderColor = 'var(--success)';
+    } else {
+      _satKeyB64 = b64;
+      document.getElementById('sat-key-label').textContent = '✅ ' + file.name;
+      document.getElementById('sat-key-zone').style.borderColor = 'var(--success)';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function openSatImport() {
+  _satCerB64 = null; _satKeyB64 = null;
+  document.getElementById('sat-cer-input').value = '';
+  document.getElementById('sat-key-input').value = '';
+  document.getElementById('sat-cer-label').textContent = '📄 Seleccionar archivo .cer';
+  document.getElementById('sat-key-label').textContent = '🔑 Seleccionar archivo .key';
+  document.getElementById('sat-cer-zone').style.borderColor = '';
+  document.getElementById('sat-key-zone').style.borderColor = '';
+  document.getElementById('sat-pwd').value = '';
+  document.getElementById('sat-error').style.display = 'none';
+  document.getElementById('sat-submit-btn').disabled = false;
+  document.getElementById('sat-submit-btn').textContent = '🛰️ Solicitar al SAT';
+  // Fecha: último mes por defecto
+  const hoy = new Date();
+  const fin = hoy.toISOString().slice(0,10);
+  const ini = new Date(hoy.getFullYear(), hoy.getMonth()-1, 1).toISOString().slice(0,10);
+  document.getElementById('sat-fecha-ini').value = ini;
+  document.getElementById('sat-fecha-fin').value = fin;
+  openSheet('sat-import');
+}
+
+async function submitSatSolicitud() {
+  const btn = document.getElementById('sat-submit-btn');
+  const errDiv = document.getElementById('sat-error');
+  errDiv.style.display = 'none';
+  if(!_satCerB64) { errDiv.textContent = 'Selecciona el archivo .cer'; errDiv.style.display='block'; return; }
+  if(!_satKeyB64) { errDiv.textContent = 'Selecciona el archivo .key'; errDiv.style.display='block'; return; }
+  const pwd = document.getElementById('sat-pwd').value;
+  if(!pwd) { errDiv.textContent = 'Ingresa la contraseña de la llave'; errDiv.style.display='block'; return; }
+  const fechaIni = document.getElementById('sat-fecha-ini').value;
+  const fechaFin = document.getElementById('sat-fecha-fin').value;
+  if(!fechaIni||!fechaFin) { errDiv.textContent = 'Selecciona el período'; errDiv.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = '⏳ Enviando al SAT…';
+  try {
+    const resp = await fetch(SAT_FN_URL + '/sat-solicitar', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+SAT_ANON },
+      body: JSON.stringify({
+        cer_b64: _satCerB64, key_b64: _satKeyB64, password: pwd,
+        tipo: document.getElementById('sat-tipo').value,
+        fecha_inicio: fechaIni, fecha_fin: fechaFin,
+        solicitado_por: currentUser?.email || 'app'
+      })
+    });
+    const data = await resp.json();
+    if(!data.ok) throw new Error(data.error || data.mensaje || 'Error del SAT');
+    closeSheet('sat-import');
+    showToast('✅ Solicitud enviada al SAT — RFC: ' + (data.rfc||'') + ' · ' + (data.mensaje||''));
+    renderSolicitudesSAT();
+  } catch(err) {
+    errDiv.textContent = err.message;
+    errDiv.style.display = 'block';
+    btn.disabled = false; btn.textContent = '🛰️ Solicitar al SAT';
+  }
+}
+
+async function renderSolicitudesSAT() {
+  const panel = document.getElementById('sat-solicitudes-panel');
+  if(!panel) return;
+  try {
+    const data = await db('GET', 'sat_solicitudes?order=created_at.desc&limit=10');
+    if(!data||!data.length) { panel.innerHTML=''; return; }
+    const estadoStyle = { pendiente:'color:var(--warn)', en_proceso:'color:var(--accent2)', listo:'color:var(--success)', descargado:'color:var(--success)', error:'color:var(--danger)' };
+    const estadoIcon  = { pendiente:'⏳', en_proceso:'🔄', listo:'📦', descargado:'✅', error:'❌' };
+    let html = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:4px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--dim);margin-bottom:10px">🛰️ SOLICITUDES SAT</div>`;
+    data.forEach(s => {
+      const icon = estadoIcon[s.estado]||'❓';
+      const st   = estadoStyle[s.estado]||'';
+      const desde = s.fecha_inicio ? s.fecha_inicio.slice(0,10) : '—';
+      const hasta = s.fecha_fin    ? s.fecha_fin.slice(0,10)    : '—';
+      const tipoLabel = s.tipo==='emitidos'?'📤 Emitidos':'📥 Recibidos';
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2);flex-wrap:wrap">
+        <span style="font-size:18px">${icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${tipoLabel} · ${desde} → ${hasta}</div>
+          <div style="font-size:11px;${st};font-weight:600;text-transform:uppercase;letter-spacing:.5px">${s.estado}${s.cfdi_importados?' · '+s.cfdi_importados+' CFDIs':''}</div>
+          ${s.error_msg?`<div style="font-size:11px;color:var(--danger)">${s.error_msg.slice(0,80)}</div>`:''}
+        </div>
+        ${(s.estado==='pendiente'||s.estado==='en_proceso')?`<button onclick="pollSatVerificar('${s.id}')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:11px;font-weight:600;cursor:pointer">🔄 Verificar</button>`:''}
+      </div>`;
+    });
+    html += `</div>`;
+    panel.innerHTML = html;
+  } catch(e) { console.error('[SAT panel]', e); panel.innerHTML=''; }
+}
+
+async function pollSatVerificar(solicitudId) {
+  showToast('🔄 Verificando solicitud con el SAT…');
+  try {
+    const resp = await fetch(SAT_FN_URL + '/sat-verificar', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+SAT_ANON },
+      body: JSON.stringify({ solicitud_id: solicitudId })
+    });
+    const data = await resp.json();
+    if(!data.ok) throw new Error(data.error || 'Error');
+    const r = data.results?.[0];
+    if(r?.status === 'descargado') {
+      showToast('✅ ' + (r.cfdi_importados||0) + ' CFDIs importados del SAT');
+      // Recargar CFDIs
+      const [e, rec] = await Promise.all([
+        db('GET','cfdi_emitidos?order=fecha.desc&limit=300'),
+        db('GET','cfdi_recibidos?order=fecha.desc&limit=50')
+      ]);
+      cfdiEmitidos = e; cfdiRecibidos = rec;
+      renderCFDI();
+    } else if(r?.status === 'error') {
+      showToast('❌ Error SAT: ' + (r.message||''));
+      renderSolicitudesSAT();
+    } else {
+      showToast('⏳ Solicitud en proceso — el SAT aún no tiene los archivos listos');
+      renderSolicitudesSAT();
+    }
+  } catch(err) { showToast('❌ ' + err.message); }
+}
+
 // ── CFDI MASIVO ──
 function openCfdiMasivo() {
   cfdiMasivoParsed=[];
