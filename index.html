@@ -848,10 +848,10 @@ body.tema-claro .sub-nav{background:#FFFFFF}
     </div>
     <div class="form-group">
       <div class="form-label">Contraseña de la llave</div>
-      <div style="position:relative">
-        <input class="form-input" type="password" id="sat-pwd" placeholder="Contraseña de tu e.firma" autocomplete="off" style="padding-right:44px">
-        <button type="button" onclick="var i=document.getElementById('sat-pwd');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈'"
-          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:4px;color:var(--dim)">👁</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" type="password" id="sat-pwd" placeholder="Contraseña de tu e.firma" autocomplete="off" style="flex:1;margin-bottom:0">
+        <button type="button" id="sat-pwd-eye" onclick="var i=document.getElementById('sat-pwd');i.type=i.type==='password'?'text':'password';document.getElementById('sat-pwd-eye').textContent=i.type==='password'?'👁':'🙈'"
+          style="flex-shrink:0;padding:10px 13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;font-size:16px;line-height:1">👁</button>
       </div>
     </div>
     <div id="sat-error" style="color:var(--danger);font-size:12px;margin-bottom:8px;display:none"></div>
