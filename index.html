@@ -5501,6 +5501,7 @@ function renderCXPList() {
       }
       html += '<div style="flex:1;min-width:0">';
       html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+      if(x.folio) html += '<span style="font-size:10px;font-weight:800;background:rgba(77,142,255,.12);border:1px solid rgba(77,142,255,.3);color:var(--accent2);border-radius:20px;padding:1px 7px;font-family:monospace;letter-spacing:.5px">'+x.folio+'</span>';
       html += '<span style="font-size:13px;font-weight:700">'+(x.proveedor||'—')+'</span>';
       if(yaEnSol && !_cxpSelMode) html += '<span style="font-size:10px;background:rgba(99,102,241,.15);color:#a78bfa;border-radius:20px;padding:1px 6px;font-weight:700">📋 En solicitud</span>';
       if(x.requisicion_id) html += '<span style="font-size:10px;background:rgba(16,185,129,.15);color:#10B981;border-radius:20px;padding:1px 6px;font-weight:700">🔗 De Requisición</span>';
