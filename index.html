@@ -3729,7 +3729,7 @@ async function renderSolicitudesSAT() {
   const panel = document.getElementById('sat-solicitudes-panel');
   if(!panel) return;
   try {
-    const data = await db('GET', 'sat_solicitudes?order=created_at.desc&limit=10');
+    const data = await dbSafe('GET', 'sat_solicitudes?order=created_at.desc&limit=10', null, 'sat_solicitudes');
     if(!data||!data.length) { panel.innerHTML=''; return; }
     const estadoStyle = { pendiente:'color:var(--warn)', en_proceso:'color:var(--accent2)', listo:'color:var(--success)', descargado:'color:var(--success)', error:'color:var(--danger)' };
     const estadoIcon  = { pendiente:'⏳', en_proceso:'🔄', listo:'📦', descargado:'✅', error:'❌' };
