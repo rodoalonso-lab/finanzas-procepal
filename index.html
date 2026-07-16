@@ -3827,7 +3827,7 @@ async function renderSolicitudesSAT() {
     const activas = data.filter(s=>s.estado==='pendiente'||s.estado==='en_proceso').length;
     const total = data.length;
 
-    let html = `<style>@keyframes satPulse{0%,100%{opacity:1}50%{opacity:.3}}.sat-row-hdr{cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;transition:background .15s}.sat-row-hdr:hover{background:var(--hover)}</style>
+    let html = `<style>@keyframes satPulse{0%,100%{opacity:1}50%{opacity:.3}}</style>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:4px">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)">
         <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--dim)">🛰️ SOLICITUDES SAT
