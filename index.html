@@ -3749,12 +3749,21 @@ let _satPollTimer = null;
 const _satExpanded = new Set();
 
 function toggleSatRow(id) {
-  if(_satExpanded.has(id)) _satExpanded.delete(id);
-  else _satExpanded.add(id);
+  const wasOpen = _satExpanded.has(id);
+  if(wasOpen) { _satExpanded.delete(id); } else { _satExpanded.add(id); }
+  // marcar como manual para que el auto-expand no lo revierta
+  _satExpanded.add('_manual_' + id);
   const body = document.getElementById('sat-body-' + id);
   const arrow = document.getElementById('sat-arrow-' + id);
-  if(body) body.style.display = _satExpanded.has(id) ? 'block' : 'none';
-  if(arrow) arrow.textContent = _satExpanded.has(id) ? '▲' : '▼';
+  if(body)  body.style.display  = wasOpen ? 'none' : 'block';
+  if(arrow) arrow.textContent   = wasOpen ? '▼' : '▲';
+}
+
+// Secciones de facturas colapsables (persiste entre re-renders)
+const _cfdiSec = { emitidas: false, recibidas: true };
+function toggleCfdiSec(key) {
+  _cfdiSec[key] = !_cfdiSec[key];
+  renderCFDI();
 }
 
 async function renderSolicitudesSAT() {
