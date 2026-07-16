@@ -5537,6 +5537,7 @@ function renderCXPList() {
       // Detalle
       html += '<div id="'+expId+'" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border);background:var(--bg)">';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:10px 0">';
+      if(x.folio)             html += '<div><div class="stat-label">Folio</div><div style="font-size:12px;font-family:monospace;font-weight:700;color:var(--accent2)">'+x.folio+'</div></div>';
       if(x.concepto)          html += '<div><div class="stat-label">Concepto</div><div style="font-size:12px">'+x.concepto+'</div></div>';
       if(x.factura)           html += '<div><div class="stat-label">Factura</div><div style="font-size:12px">'+x.factura+'</div></div>';
       if(x.fecha_vencimiento) html += '<div><div class="stat-label">Vencimiento</div><div style="font-size:12px">'+fmtDate(x.fecha_vencimiento)+'</div></div>';
