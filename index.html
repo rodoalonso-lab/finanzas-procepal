@@ -3729,39 +3729,101 @@ async function submitSatSolicitud() {
   }
 }
 
+let _satPollTimer = null;
+
 async function renderSolicitudesSAT() {
   const panel = document.getElementById('sat-solicitudes-panel');
   if(!panel) return;
+  // Cancelar timer anterior
+  if(_satPollTimer) { clearInterval(_satPollTimer); _satPollTimer = null; }
   try {
     const data = await dbSafe('GET', 'sat_solicitudes?order=created_at.desc&limit=10', null, 'sat_solicitudes');
     if(!data||!data.length) { panel.innerHTML=''; return; }
-    const estadoStyle = { pendiente:'color:var(--warn)', en_proceso:'color:var(--accent2)', listo:'color:var(--success)', descargado:'color:var(--success)', error:'color:var(--danger)' };
-    const estadoIcon  = { pendiente:'⏳', en_proceso:'🔄', listo:'📦', descargado:'✅', error:'❌' };
+
+    // Pasos del proceso SAT
+    const PASOS = ['Enviada', 'SAT Procesando', 'Lista', 'Importada'];
+    function stepIndex(estado) {
+      if(estado==='error') return -1;
+      if(estado==='pendiente') return 0;
+      if(estado==='en_proceso') return 1;
+      if(estado==='listo') return 2;
+      return 3; // descargado
+    }
+    function tiempoRelativo(ts) {
+      if(!ts) return '';
+      const diff = Math.floor((Date.now() - new Date(ts)) / 1000);
+      if(diff < 60) return 'hace ' + diff + 's';
+      if(diff < 3600) return 'hace ' + Math.floor(diff/60) + 'min';
+      return 'hace ' + Math.floor(diff/3600) + 'h';
+    }
+
     let html = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:4px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--dim);margin-bottom:10px">🛰️ SOLICITUDES SAT</div>`;
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--dim)">🛰️ SOLICITUDES SAT</span>
+        <button onclick="renderSolicitudesSAT()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--dim)" title="Actualizar">↺</button>
+      </div>`;
+
+    let hayActivas = false;
     data.forEach(s => {
-      const icon = estadoIcon[s.estado]||'❓';
-      const st   = estadoStyle[s.estado]||'';
+      const step = stepIndex(s.estado);
+      const activa = s.estado==='pendiente' || s.estado==='en_proceso';
+      if(activa) hayActivas = true;
       const desde = s.fecha_inicio ? s.fecha_inicio.slice(0,10) : '—';
       const hasta = s.fecha_fin    ? s.fecha_fin.slice(0,10)    : '—';
-      const tipoLabel = s.tipo==='emitidos'?'📤 Emitidos':'📥 Recibidos';
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2);flex-wrap:wrap">
-        <span style="font-size:18px">${icon}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${tipoLabel} · ${desde} → ${hasta}</div>
-          <div style="font-size:11px;${st};font-weight:600;text-transform:uppercase;letter-spacing:.5px">${s.estado}${s.cfdi_importados?' · '+s.cfdi_importados+' CFDIs':''}</div>
-          ${s.error_msg?`<div style="font-size:11px;color:var(--danger)">${s.error_msg.slice(0,80)}</div>`:''}
+      const tipoLabel = s.tipo==='emitidos' ? '📤 Emitidos' : '📥 Recibidos';
+      const tiempo = tiempoRelativo(s.updated_at || s.created_at);
+
+      // Barra de pasos
+      let stepsHtml = `<div style="display:flex;gap:0;margin:8px 0 4px;align-items:center">`;
+      PASOS.forEach((nombre, i) => {
+        const done   = step >= 0 && i < step;
+        const active = step === i;
+        const isErr  = step === -1 && i === 0;
+        const col = isErr ? 'var(--danger)' : done ? 'var(--success)' : active ? 'var(--accent2)' : 'var(--border)';
+        const txtCol = (done||active) ? (isErr?'var(--danger)':done?'var(--success)':'var(--accent2)') : 'var(--dim)';
+        stepsHtml += `
+          <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:3px">
+            <div style="width:18px;height:18px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;position:relative">
+              ${done ? '✓' : active && !isErr ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;animation:satPulse 1s ease-in-out infinite"></span>` : i+1}
+            </div>
+            <span style="font-size:9px;color:${txtCol};font-weight:600;text-align:center;line-height:1.1">${nombre}</span>
+          </div>
+          ${i < PASOS.length-1 ? `<div style="flex:1;height:2px;background:${done?'var(--success)':'var(--border)'};margin-bottom:14px;max-width:30px"></div>` : ''}`;
+      });
+      stepsHtml += `</div>`;
+
+      html += `<div style="padding:10px 0;border-bottom:1px solid var(--border2)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${tipoLabel} · ${desde} → ${hasta}</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:1px">${tiempo}${s.rfc_solicitante?' · '+s.rfc_solicitante:''}</div>
+          </div>
+          ${activa ? `<button id="btn-verificar-${s.id}" onclick="pollSatVerificar('${s.id}')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">🔄 Verificar</button>` : ''}
         </div>
-        ${(s.estado==='pendiente'||s.estado==='en_proceso')?`<button onclick="pollSatVerificar('${s.id}')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:11px;font-weight:600;cursor:pointer">🔄 Verificar</button>`:''}
+        ${stepsHtml}
+        ${s.estado==='descargado' ? `<div style="font-size:12px;color:var(--success);font-weight:600">✅ ${s.cfdi_importados||0} CFDIs importados</div>` : ''}
+        ${s.estado==='error' ? `<div style="font-size:11px;color:var(--danger);margin-top:4px">❌ ${(s.error_msg||'Error').slice(0,100)}</div>` : ''}
       </div>`;
     });
-    html += `</div>`;
+
+    html += `</div>
+    <style>@keyframes satPulse{0%,100%{opacity:1}50%{opacity:.3}}</style>`;
     panel.innerHTML = html;
+
+    // Auto-polling cada 30s si hay solicitudes activas
+    if(hayActivas) {
+      _satPollTimer = setInterval(async () => {
+        const panelChk = document.getElementById('sat-solicitudes-panel');
+        if(!panelChk) { clearInterval(_satPollTimer); return; }
+        await renderSolicitudesSAT();
+      }, 30000);
+    }
   } catch(e) { console.error('[SAT panel]', e); panel.innerHTML=''; }
 }
 
 async function pollSatVerificar(solicitudId) {
-  showToast('🔄 Verificando solicitud con el SAT…');
+  const btn = document.getElementById('btn-verificar-' + solicitudId);
+  if(btn) { btn.disabled=true; btn.textContent='⏳ Verificando…'; }
   try {
     const resp = await fetch(SAT_FN_URL + '/sat-verificar', {
       method: 'POST',
@@ -3773,7 +3835,6 @@ async function pollSatVerificar(solicitudId) {
     const r = data.results?.[0];
     if(r?.status === 'descargado') {
       showToast('✅ ' + (r.cfdi_importados||0) + ' CFDIs importados del SAT');
-      // Recargar CFDIs
       const [e, rec] = await Promise.all([
         dbSafe('GET','cfdi_emitidos?order=fecha.desc&limit=300', null, 'cfdi_emitidos'),
         dbSafe('GET','cfdi_recibidos?order=fecha.desc&limit=50', null, 'cfdi_recibidos')
@@ -3784,10 +3845,14 @@ async function pollSatVerificar(solicitudId) {
       showToast('❌ Error SAT: ' + (r.message||''));
       renderSolicitudesSAT();
     } else {
-      showToast('⏳ Solicitud en proceso — el SAT aún no tiene los archivos listos');
+      const estado = r?.status === 'en_proceso' ? 'SAT aún procesando' : 'pendiente';
+      showToast('⏳ ' + estado + ' — se verifica automáticamente cada 30s');
       renderSolicitudesSAT();
     }
-  } catch(err) { showToast('❌ ' + err.message); }
+  } catch(err) {
+    showToast('❌ ' + err.message);
+    renderSolicitudesSAT();
+  }
 }
 
 // ── CFDI MASIVO ──
