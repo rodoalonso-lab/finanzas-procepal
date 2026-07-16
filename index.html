@@ -2687,9 +2687,15 @@ function renderCFDIFacturas() {
     </button>
   </div>`;
 
+  const PAGE_SIZE_CFDI = 100;
   const renderCFDIList = (list, tipo) => {
     if(!list.length) return `<div class="empty" style="padding:24px"><div class="item-sub">Sin CFDI ${tipo}</div></div>`;
-    return list.slice(0,50).map(c=>{
+    const pid = 'cfdi-page-' + tipo;
+    const page = parseInt(sessionStorage.getItem(pid)||'0');
+    const start = page * PAGE_SIZE_CFDI;
+    const slice = list.slice(start, start + PAGE_SIZE_CFDI);
+    const totalPags = Math.ceil(list.length / PAGE_SIZE_CFDI);
+    let rows = slice.map(c=>{
       const obra = obras.find(o=>o.id===c.obra_id);
       const sel = cfdiSeleccion.has(c.uuid_sat);
       return `<div class="list-item" style="${sel?'background:rgba(255,77,106,.05);':''}">
@@ -2699,7 +2705,7 @@ function renderCFDIFacturas() {
           <div class="item-main">${tipo==='emitidos'?c.receptor_nombre:c.emisor_nombre||'—'}</div>
           <div class="item-sub">${c.uuid_sat?c.uuid_sat.slice(0,18)+'…':'Sin UUID'} · ${fmtDate(c.fecha)}</div>
           ${obra?`<div class="item-sub" style="color:var(--accent2)">🏗 ${obra.nombre}</div>`:''}
-          ${c.concepto?`<div class="item-sub">${c.concepto.slice(0,50)}</div>`:''}
+          ${c.concepto?`<div class="item-sub">${c.concepto.slice(0,60)}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;margin-left:8px">
           <div class="item-amount" style="color:${tipo==='emitidos'?'var(--success)':'var(--accent2)'}">${fmt(c.total)}</div>
@@ -2709,6 +2715,14 @@ function renderCFDIFacturas() {
         </div>
       </div>`;
     }).join('');
+    if(totalPags > 1) {
+      rows += `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0;border-top:1px solid var(--border)">
+        <button onclick="sessionStorage.setItem('${pid}',${Math.max(0,page-1)});renderCFDI()" ${page===0?'disabled':''} style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);cursor:pointer;font-size:12px">‹ Ant</button>
+        <span style="font-size:12px;color:var(--dim)">${start+1}–${Math.min(start+PAGE_SIZE_CFDI,list.length)} de ${list.length}</span>
+        <button onclick="sessionStorage.setItem('${pid}',${Math.min(totalPags-1,page+1)});renderCFDI()" ${page>=totalPags-1?'disabled':''} style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);cursor:pointer;font-size:12px">Sig ›</button>
+      </div>`;
+    }
+    return rows;
   };
 
   html += `<div class="section-title">Facturas Emitidas</div><div class="card">${renderCFDIList(facturasEmitidas,'emitidos')}</div>`;
