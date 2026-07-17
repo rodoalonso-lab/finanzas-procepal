@@ -4642,13 +4642,78 @@ function renderSolicitudesPago() {
   var saldoTotal = cuentas.reduce(function(s,c){ return s+(c.saldo_actual||c.saldo_inicial||0); },0);
   var html = '';
 
-  // Filtrar por usuario si no es director
-  var listaSols = isDir
+  // ── Filtrar por usuario si no es director ──
+  var todosSols = isDir
     ? solicitudesPago
     : solicitudesPago.filter(function(s){ return s.creado_por === currentUser.nombre; });
 
+  // ── Estado de filtros ──
+  if(!window._solFiltros) window._solFiltros = {estatus:'', solicitante:'', mes:'', obra:''};
+  var F = window._solFiltros;
+
+  // ── Función helper: etiqueta de estatus efectiva ──
+  function estLabel(sol) {
+    if(sol.estatus !== 'REVISADA') return sol.estatus;
+    var its = solicitudItems.filter(function(si){ return si.solicitud_id===sol.id; });
+    var tot = its.reduce(function(a,si){ return a+(si.monto||0); },0);
+    var aut = its.reduce(function(a,si){ return a+(si.monto_autorizado||0); },0);
+    return (aut >= tot && tot > 0) ? 'PAGADA' : 'PAGADA PARCIALMENTE';
+  }
+
+  // ── Función helper: obras de una solicitud (via items → cxpData) ──
+  function obrasDeSOL(sol) {
+    var its = solicitudItems.filter(function(si){ return si.solicitud_id===sol.id; });
+    return [...new Set(its.map(function(si){
+      var c = cxpData.find(function(x){ return x.id===si.cxp_id; });
+      return c ? (c.obra_nombre||'') : '';
+    }).filter(Boolean))];
+  }
+
+  // ── Opciones únicas para dropdowns ──
+  var estOpts    = ['PENDIENTE','PAGADA','PAGADA PARCIALMENTE'];
+  var solOpts    = [...new Set(todosSols.map(function(s){ return s.creado_por||''; }).filter(Boolean))].sort();
+  var mesOpts    = [...new Set(todosSols.map(function(s){ return (s.created_at||'').slice(0,7); }).filter(Boolean))].sort().reverse();
+  var obraOpts   = [...new Set(todosSols.flatMap(function(s){ return obrasDeSOL(s); }))].sort();
+
+  // ── Aplicar filtros ──
+  var listaSols = todosSols.filter(function(sol){
+    if(F.estatus && estLabel(sol) !== F.estatus) return false;
+    if(F.solicitante && (sol.creado_por||'') !== F.solicitante) return false;
+    if(F.mes && !(sol.created_at||'').startsWith(F.mes)) return false;
+    if(F.obra && !obrasDeSOL(sol).includes(F.obra)) return false;
+    return true;
+  });
+
+  // ── Barra de filtros ──
+  var hayF = F.estatus||F.solicitante||F.mes||F.obra;
+  var ss = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit;cursor:pointer;min-width:110px;';
+  var sa = 'border-color:var(--accent);color:var(--accent);';
+  function mesLabel(m){ var d=new Date(m+'-01'); return d.toLocaleDateString('es-MX',{month:'short',year:'numeric'}); }
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border)">
+    <span style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Filtrar</span>
+    <select style="${ss}${F.estatus?sa:''}" onchange="window._solFiltros.estatus=this.value;document.getElementById('sol-view').innerHTML=renderSolicitudesPago()">
+      <option value="">Estatus</option>
+      ${estOpts.map(e=>`<option value="${e}"${F.estatus===e?' selected':''}>${e.charAt(0)+e.slice(1).toLowerCase()}</option>`).join('')}
+    </select>
+    <select style="${ss}${F.solicitante?sa:''}" onchange="window._solFiltros.solicitante=this.value;document.getElementById('sol-view').innerHTML=renderSolicitudesPago()">
+      <option value="">Solicitante</option>
+      ${solOpts.map(s=>`<option value="${escHtml(s)}"${F.solicitante===s?' selected':''}>${escHtml(s)}</option>`).join('')}
+    </select>
+    <select style="${ss}${F.mes?sa:''}" onchange="window._solFiltros.mes=this.value;document.getElementById('sol-view').innerHTML=renderSolicitudesPago()">
+      <option value="">Mes</option>
+      ${mesOpts.map(m=>`<option value="${m}"${F.mes===m?' selected':''}>${mesLabel(m)}</option>`).join('')}
+    </select>
+    <select style="${ss}${F.obra?sa:''}" onchange="window._solFiltros.obra=this.value;document.getElementById('sol-view').innerHTML=renderSolicitudesPago()">
+      <option value="">Obra</option>
+      ${obraOpts.map(o=>`<option value="${escHtml(o)}"${F.obra===o?' selected':''}>${escHtml(o)}</option>`).join('')}
+    </select>
+    ${hayF?`<button onclick="window._solFiltros={estatus:'',solicitante:'',mes:'',obra:''};document.getElementById('sol-view').innerHTML=renderSolicitudesPago()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dim);cursor:pointer;font-family:inherit">✕ Limpiar</button>`:''}
+    <span style="margin-left:auto;font-size:11px;color:var(--dim)">${listaSols.length} de ${todosSols.length} solicitud${todosSols.length!==1?'es':''}</span>
+  </div>`;
+
   if(!listaSols.length) {
-    return '<div class="card" style="text-align:center;padding:32px;color:var(--dim)"><div style="font-size:32px;margin-bottom:8px">📋</div>'+(isDir?'No hay solicitudes de pago aún':'Aún no has enviado ninguna solicitud de pago')+'</div>';
+    html += '<div class="card" style="text-align:center;padding:32px;color:var(--dim)"><div style="font-size:32px;margin-bottom:8px">🔍</div>'+(hayF?'Sin resultados para este filtro':'No hay solicitudes de pago aún')+'</div>';
+    return html;
   }
 
   // Marcar notificaciones de revisadas como vistas al abrir la tab
