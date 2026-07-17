@@ -4650,6 +4650,7 @@ function renderSolicitudesPago() {
   // ── Estado de filtros ──
   if(!window._solFiltros) window._solFiltros = {estatus:'', solicitante:'', mes:'', obra:''};
   var F = window._solFiltros;
+  var _esc = function(s){ return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; };
 
   // ── Función helper: etiqueta de estatus efectiva ──
   function estLabel(sol) {
