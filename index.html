@@ -4698,7 +4698,7 @@ function renderSolicitudesPago() {
     </select>
     <select style="${ss}${F.solicitante?sa:''}" onchange="window._solFiltros.solicitante=this.value;renderPlaneacion()">
       <option value="">Solicitante</option>
-      ${solOpts.map(s=>`<option value="${escHtml(s)}"${F.solicitante===s?' selected':''}>${escHtml(s)}</option>`).join('')}
+      ${solOpts.map(s=>`<option value="${_esc(s)}"${F.solicitante===s?' selected':''}>${_esc(s)}</option>`).join('')}
     </select>
     <select style="${ss}${F.mes?sa:''}" onchange="window._solFiltros.mes=this.value;renderPlaneacion()">
       <option value="">Mes</option>
@@ -4706,7 +4706,7 @@ function renderSolicitudesPago() {
     </select>
     <select style="${ss}${F.obra?sa:''}" onchange="window._solFiltros.obra=this.value;renderPlaneacion()">
       <option value="">Obra</option>
-      ${obraOpts.map(o=>`<option value="${escHtml(o)}"${F.obra===o?' selected':''}>${escHtml(o)}</option>`).join('')}
+      ${obraOpts.map(o=>`<option value="${_esc(o)}"${F.obra===o?' selected':''}>${_esc(o)}</option>`).join('')}
     </select>
     ${hayF?`<button onclick="window._solFiltros={estatus:'',solicitante:'',mes:'',obra:''};renderPlaneacion()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dim);cursor:pointer;font-family:inherit">✕ Limpiar</button>`:''}
     <span style="margin-left:auto;font-size:11px;color:var(--dim)">${listaSols.length} de ${todosSols.length} solicitud${todosSols.length!==1?'es':''}</span>
