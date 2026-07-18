@@ -7343,12 +7343,13 @@ if('serviceWorker' in navigator){
     el.innerHTML=_msgs.map(function(m){return _mb(m,m.usuario===_myName,m.usuario===_myName?'Tú':'Admin');}).join('');el.scrollTop=el.scrollHeight;_markRead('para=eq.'+encodeURIComponent(_myName),function(m){return m.para===_myName;});
   }
   async function sendChatMsg(){
+    if(_sending)return;
     var inp=document.getElementById('chat-input');if(!inp)return;
     var txt=(inp.value||'').trim();if(!txt)return;
     if(_isAdmin&&!_selUser)return;
-    inp.value='';
+    _sending=true;inp.value='';
     try{var r=await fetch(SUPABASE_URL+'/rest/v1/chat_mensajes',{method:'POST',headers:Object.assign({'Content-Type':'application/json','Prefer':'return=representation'},_hdr()),body:JSON.stringify({usuario:_myName,mensaje:txt,app:CHAT_APP,para:_isAdmin?_selUser:null})});
-      var sv=await r.json();if(Array.isArray(sv)&&sv.length){_msgs.push(sv[0]);_lastTs=sv[0].created_at;_render();}}catch(e){inp.value=txt;}
+      var sv=await r.json();if(Array.isArray(sv)&&sv.length){_msgs.push(sv[0]);_lastTs=sv[0].created_at;_render();}}catch(e){inp.value=txt;}finally{_sending=false;}
   }
   window.sendChatMsg=sendChatMsg;
   function toggleChatPanel(){
