@@ -5934,20 +5934,27 @@ async function saveDeuda() {
   btn.textContent='Guardar'; btn.disabled=false;
 }
 async function registrarPagoDeuda(id) {
-  var inp=document.getElementById('pago-inp-'+id);
-  var monto=parseFloat(inp?inp.value:0)||0;
-  if(!monto||monto<=0){showToast('Ingresa un monto válido',true);return;}
+  var capInp=document.getElementById('pago-cap-'+id);
+  var intInp=document.getElementById('pago-int-'+id);
+  var capital=parseFloat(capInp?capInp.value:0)||0;
+  var intereses=parseFloat(intInp?intInp.value:0)||0;
+  if(capital<=0&&intereses<=0){showToast('Ingresa al menos un monto',true);return;}
+  if(capital<0||intereses<0){showToast('Los montos no pueden ser negativos',true);return;}
   var x=deudaData.find(function(d){return d.id===id;});if(!x)return;
-  var nuevoSaldo=Math.max(0,(x.saldo_actual||0)-monto);
+  var nuevoSaldo=Math.max(0,(x.saldo_actual||0)-capital);
   var patch={saldo_actual:nuevoSaldo};
-  if(x.fecha_proximo_pago){
+  if(x.fecha_proximo_pago&&capital>0){
     var d=new Date(x.fecha_proximo_pago+'T12:00:00');
     d.setMonth(d.getMonth()+1);
     patch.fecha_proximo_pago=d.toISOString().substring(0,10);
   }
   try{
     await db('PATCH','deuda_financiera?id=eq.'+id,patch);
-    showToast('✅ Pago de '+fmt(monto)+' aplicado — Nuevo saldo: '+fmt(nuevoSaldo));
+    var msg='✅ Pago aplicado';
+    if(capital>0) msg+=' — Capital: '+fmt(capital);
+    if(intereses>0) msg+=' — Intereses: '+fmt(intereses);
+    msg+=' — Nuevo saldo: '+fmt(nuevoSaldo);
+    showToast(msg);
     await loadAll();renderPlaneacion();
   }catch(e){showToast('Error: '+e.message,true);}
 }
