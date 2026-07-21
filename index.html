@@ -5596,9 +5596,19 @@ function renderDeudaList() {
       html += '<button onclick="editDeuda(\''+x.id+'\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer">✏️ Editar</button>';
       html += '<button onclick="deleteDeuda(\''+x.id+'\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑 Eliminar</button>';
       html += '</div>';
-      html += '<div style="margin-top:10px;display:flex;gap:6px;align-items:center">';
-      html += '<input id="pago-inp-'+x.id+'" type="number" placeholder="Monto pagado" step="0.01" min="0.01" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-family:inherit">';
-      html += '<button onclick="registrarPagoDeuda(\''+x.id+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">💳 Registrar pago</button>';
+      html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
+      html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.04em">REGISTRAR PAGO</div>';
+      html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
+      html += '<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px">';
+      html += '<label style="font-size:10px;color:var(--dim)">Capital</label>';
+      html += '<input id="pago-cap-'+x.id+'" type="number" placeholder="0.00" step="0.01" min="0" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-family:inherit;width:100%;box-sizing:border-box">';
+      html += '</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px">';
+      html += '<label style="font-size:10px;color:var(--dim)">Intereses</label>';
+      html += '<input id="pago-int-'+x.id+'" type="number" placeholder="0.00" step="0.01" min="0" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-family:inherit;width:100%;box-sizing:border-box">';
+      html += '</div>';
+      html += '<button onclick="registrarPagoDeuda(\''+x.id+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end">💳 Registrar pago</button>';
+      html += '</div>';
       html += '</div>';
     }
     html += '</div></div>';
