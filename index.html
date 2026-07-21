@@ -5862,11 +5862,32 @@ async function deleteCXC(id) {
 }
 
 function openNewDeuda() {
+  _editDeudaId = null;
+  document.querySelector('#sheet-deuda .sheet-title').textContent='Nueva Deuda Financiera';
   ['deu-acreedor','deu-obs'].forEach(function(id){document.getElementById(id).value='';});
   ['deu-original','deu-saldo','deu-tasa','deu-pago-mensual'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('deu-prox-pago').value='';
   document.getElementById('deu-vencimiento').value='';
+  document.getElementById('deu-negocio').value='RAL';
   document.getElementById('deu-save-btn').textContent='Guardar';
+  document.getElementById('deu-save-btn').disabled=false;
+  openSheet('deuda');
+}
+function editDeuda(id) {
+  var x=deudaData.find(function(d){return d.id===id;});if(!x)return;
+  _editDeudaId=id;
+  document.querySelector('#sheet-deuda .sheet-title').textContent='Editar Deuda';
+  document.getElementById('deu-acreedor').value=x.acreedor||'';
+  document.getElementById('deu-tipo').value=x.tipo||'credito_bancario';
+  document.getElementById('deu-original').value=x.monto_original||'';
+  document.getElementById('deu-saldo').value=x.saldo_actual||'';
+  document.getElementById('deu-tasa').value=x.tasa_interes||'';
+  document.getElementById('deu-pago-mensual').value=x.pago_mensual||'';
+  document.getElementById('deu-prox-pago').value=x.fecha_proximo_pago||'';
+  document.getElementById('deu-vencimiento').value=x.fecha_vencimiento||'';
+  document.getElementById('deu-negocio').value=x.negocio||'RAL';
+  document.getElementById('deu-obs').value=x.observaciones||'';
+  document.getElementById('deu-save-btn').textContent='Guardar cambios';
   document.getElementById('deu-save-btn').disabled=false;
   openSheet('deuda');
 }
