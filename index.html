@@ -2511,9 +2511,7 @@ function renderCFDIFacturas() {
       <button onclick="setCfdiSubTab('facturas')" style="padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:var(--accent);color:#fff">📄 Facturas</button>
       <button onclick="setCfdiSubTab('nomina')" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:var(--text)">👷 Nómina</button>
     </div>
-    <button onclick="openSatImport()" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(77,142,255,.4);cursor:pointer;font-size:12px;font-weight:600;background:rgba(77,142,255,.1);color:var(--accent2)">🛰️ Importar del SAT</button>
-  </div>
-  <div id="sat-solicitudes-panel" style="margin-bottom:12px"></div>`;
+  </div>`;
 
   // Aviso si se excluyeron nóminas
   if(nominasExcluidas > 0) {
