@@ -2682,7 +2682,6 @@ function renderCFDIFacturas() {
     ${_cfdiSec.recibidas ? `<div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none">${renderCFDIList(cfdiRecibidos,'recibidos')}</div>` : ''}
   </div>`;
   document.getElementById('main-content').innerHTML = html;
-  renderSolicitudesSAT();
   // Aplicar indeterminate
   const chkAll = document.getElementById('cfdi-chk-all');
   if(chkAll) chkAll.indeterminate = cfdiSeleccion.size>0 && !todosSelec;
