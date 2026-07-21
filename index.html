@@ -5898,23 +5898,48 @@ async function saveDeuda() {
   if(!acreedor||!saldo){showToast('Acreedor y saldo son obligatorios',true);return;}
   var btn = document.getElementById('deu-save-btn');
   btn.textContent='Guardando...'; btn.disabled=true;
+  var payload = {
+    acreedor:acreedor, tipo:document.getElementById('deu-tipo').value,
+    monto_original:parseFloat(document.getElementById('deu-original').value)||saldo,
+    saldo_actual:saldo,
+    tasa_interes:parseFloat(document.getElementById('deu-tasa').value)||null,
+    pago_mensual:parseFloat(document.getElementById('deu-pago-mensual').value)||null,
+    fecha_proximo_pago:document.getElementById('deu-prox-pago').value||null,
+    fecha_vencimiento:document.getElementById('deu-vencimiento').value||null,
+    negocio:document.getElementById('deu-negocio').value,
+    observaciones:document.getElementById('deu-obs').value.trim()||null
+  };
   try {
-    await db('POST','deuda_financiera',{
-      acreedor:acreedor, tipo:document.getElementById('deu-tipo').value,
-      monto_original:parseFloat(document.getElementById('deu-original').value)||saldo,
-      saldo_actual:saldo,
-      tasa_interes:parseFloat(document.getElementById('deu-tasa').value)||null,
-      pago_mensual:parseFloat(document.getElementById('deu-pago-mensual').value)||null,
-      fecha_proximo_pago:document.getElementById('deu-prox-pago').value||null,
-      fecha_vencimiento:document.getElementById('deu-vencimiento').value||null,
-      negocio:document.getElementById('deu-negocio').value,
-      observaciones:document.getElementById('deu-obs').value.trim()||null,
-      created_by:currentUser.nombre
-    });
-    showToast('✅ Deuda registrada');
+    if(_editDeudaId){
+      await db('PATCH','deuda_financiera?id=eq.'+_editDeudaId, payload);
+      showToast('✅ Deuda actualizada');
+    } else {
+      payload.created_by=currentUser.nombre;
+      await db('POST','deuda_financiera', payload);
+      showToast('✅ Deuda registrada');
+    }
+    _editDeudaId=null;
     closeSheet('deuda'); await loadAll(); renderPlaneacion();
   } catch(e){showToast('Error: '+e.message,true);}
   btn.textContent='Guardar'; btn.disabled=false;
+}
+async function registrarPagoDeuda(id) {
+  var inp=document.getElementById('pago-inp-'+id);
+  var monto=parseFloat(inp?inp.value:0)||0;
+  if(!monto||monto<=0){showToast('Ingresa un monto válido',true);return;}
+  var x=deudaData.find(function(d){return d.id===id;});if(!x)return;
+  var nuevoSaldo=Math.max(0,(x.saldo_actual||0)-monto);
+  var patch={saldo_actual:nuevoSaldo};
+  if(x.fecha_proximo_pago){
+    var d=new Date(x.fecha_proximo_pago+'T12:00:00');
+    d.setMonth(d.getMonth()+1);
+    patch.fecha_proximo_pago=d.toISOString().substring(0,10);
+  }
+  try{
+    await db('PATCH','deuda_financiera?id=eq.'+id,patch);
+    showToast('✅ Pago de '+fmt(monto)+' aplicado — Nuevo saldo: '+fmt(nuevoSaldo));
+    await loadAll();renderPlaneacion();
+  }catch(e){showToast('Error: '+e.message,true);}
 }
 
 async function deleteDeuda(id) {
