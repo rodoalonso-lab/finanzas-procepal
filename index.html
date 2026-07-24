@@ -5254,9 +5254,9 @@ function renderCXPList() {
   // Chips estatus
   html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
   html += '<span style="font-size:10px;font-weight:700;color:var(--dim);letter-spacing:1px">ESTATUS:</span>';
-  var estColors = {VENCIDO:'var(--danger)',PENDIENTE:'var(--text)',PROXIMO:'var(--warn)',PAGADO:'var(--dim)'};
-  var estBgs    = {VENCIDO:'rgba(255,77,106,.12)',PENDIENTE:'rgba(228,235,248,.12)',PROXIMO:'rgba(244,168,74,.12)',PAGADO:'rgba(90,107,138,.12)'};
-  ['VENCIDO','PENDIENTE','PROXIMO','PAGADO'].forEach(function(est) {
+  var estColors = {VENCIDO:'var(--danger)',PENDIENTE:'var(--text)',PROXIMO:'var(--warn)',PAGADO:'var(--dim)',SOLICITADO:'#a78bfa'};
+  var estBgs    = {VENCIDO:'rgba(255,77,106,.12)',PENDIENTE:'rgba(228,235,248,.12)',PROXIMO:'rgba(244,168,74,.12)',PAGADO:'rgba(90,107,138,.12)',SOLICITADO:'rgba(167,139,250,.15)'};
+  ['VENCIDO','PENDIENTE','PROXIMO','PAGADO','SOLICITADO'].forEach(function(est) {
     var sel = filtrosEstatus.includes(est);
     var c   = estColors[est];
     var bg  = sel ? estBgs[est] : 'transparent';
