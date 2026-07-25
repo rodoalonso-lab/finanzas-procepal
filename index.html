@@ -4553,15 +4553,20 @@ function renderSolicitudesPago() {
         // Vista resumen post-aprobación
         var _siPagado = (si.monto_autorizado||0) > 0;
         var _cxpRef2 = si.cxp_id ? cxpData.find(function(cc){ return cc.id===si.cxp_id; }) : null;
-        var _saldoCxp = _cxpRef2 ? Math.max(0,((_cxpRef2.monto||0)-((_cxpRef2.pagado_parcial)||0))) : 0;
+        // Saldo del ítem: lo que falta de cubrir en ESTE ítem de esta solicitud
+        var _saldoItem = Math.max(0,(si.monto||0)-(si.monto_autorizado||0));
+        // Saldo real de la CxP en BD (para no abonar de más)
+        var _saldoCxp = _cxpRef2 ? Math.max(0,((_cxpRef2.monto||0)-((_cxpRef2.pagado_parcial)||0))) : _saldoItem;
+        // El saldo a mostrar/usar es el menor de ambos (no podemos abonar más de lo que debe la CxP)
+        var _saldoMostrar = Math.min(_saldoItem, _saldoCxp);
         if(_siPagado) {
           html += '<div style="padding-left:18px;font-size:11px;color:var(--success);font-weight:700">✓ Pagado: '+fmt(si.monto_autorizado)+(si.fecha_pago?' <span style="font-weight:400;color:var(--dim)">· '+fmtDate(si.fecha_pago)+'</span>':'')+'</div>';
         }
-        if(isDir && sol.estatus==='REVISADA' && si.cxp_id && _saldoCxp > 0) {
-          // Director puede abonar el saldo restante de la CxP
+        if(isDir && sol.estatus==='REVISADA' && si.cxp_id && _saldoMostrar > 0) {
+          // Director puede abonar el saldo restante del ítem
           html += '<div style="padding-left:18px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">';
-          html += '<span style="font-size:11px;color:var(--warn);font-weight:700">Saldo: '+fmt(_saldoCxp)+'</span>';
-          html += '<input type="number" id="pago-pend-'+si.id+'" value="'+_saldoCxp+'" min="0" step="0.01" style="width:130px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none">';
+          html += '<span style="font-size:11px;color:var(--warn);font-weight:700">Saldo: '+fmt(_saldoMostrar)+'</span>';
+          html += '<input type="number" id="pago-pend-'+si.id+'" value="'+_saldoMostrar+'" min="0" max="'+_saldoCxp+'" step="0.01" style="width:130px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;color:var(--text);font-family:Space Grotesk,sans-serif;outline:none">';
           html += '<button onclick="aplicarPagoItemPendiente(\''+si.id+'\',\''+si.cxp_id+'\',\''+sol.id+'\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(0,209,140,.4);background:rgba(0,209,140,.1);color:var(--success);font-size:11px;cursor:pointer;font-weight:700">💰 Abonar</button>';
           html += '</div>';
         } else if(!_siPagado && !isDir) {
