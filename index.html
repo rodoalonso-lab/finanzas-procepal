@@ -4782,12 +4782,15 @@ async function aplicarPagoItemPendiente(siId, cxpId, solId) {
   var inp = document.getElementById('pago-pend-'+siId);
   var monto = inp ? (parseFloat(inp.value)||0) : 0;
   if(monto <= 0) { showToast('Escribe un monto mayor a 0','warn'); return; }
-  if(!confirm('¿Aplicar pago de '+fmt(monto)+' a esta CxP?')) return;
+  if(!confirm('¿Aplicar abono de '+fmt(monto)+' a esta CxP?')) return;
   try {
     showToast('Aplicando...');
-    // Guardar monto en el item de la solicitud
-    await db('PATCH','solicitud_pago_items?id=eq.'+siId,{ monto_autorizado: monto, aprobado: true, fecha_pago: new Date().toISOString() });
-    // Aplicar abono a la CxP
+    // Sumar al monto_autorizado existente del item (no reemplazar)
+    var siActual = solicitudItems.find(function(s){ return s.id===siId; });
+    var montoAnterior = siActual ? (parseFloat(siActual.monto_autorizado)||0) : 0;
+    var montoTotalItem = montoAnterior + monto;
+    await db('PATCH','solicitud_pago_items?id=eq.'+siId,{ monto_autorizado: montoTotalItem, aprobado: true, fecha_pago: new Date().toISOString() });
+    // Aplicar abono a la CxP (sumar sobre pagado_parcial actual)
     var cxp = cxpData.find(function(c){ return c.id===cxpId; });
     if(!cxp) {
       var r = await dbSafe('GET','cuentas_por_pagar?id=eq.'+cxpId,null,'cxp_pend');
@@ -4798,7 +4801,7 @@ async function aplicarPagoItemPendiente(siId, cxpId, solId) {
       var nuevoEstatus = nuevoPagado >= (parseFloat(cxp.monto)||0) ? 'PAGADO' : cxp.estatus;
       await db('PATCH','cuentas_por_pagar?id=eq.'+cxpId,{ pagado_parcial: nuevoPagado, estatus: nuevoEstatus });
     }
-    showToast('✅ Pago aplicado');
+    showToast('✅ Abono aplicado');
     await loadPlaneacion();
     renderPlaneacion();
   } catch(e) { showToast('Error: '+e.message,'error'); }
