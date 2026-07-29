@@ -6670,10 +6670,6 @@ function aplicarRBAC() {
     var fab = document.getElementById('fab-btn');
     if(fab) fab.style.display = '';
 
-    // ── Claude FAB solo para director/admin ───────────────────────────
-    var cfab = document.getElementById('claude-fab');
-    if(cfab) cfab.style.display = (currentUser && (currentUser.rol==='director'||currentUser.rol==='admin')) ? 'flex' : 'none';
-
     // ── Aplicar permisos de módulo si no es admin/director ────────────
     if(!esAdmin && currentUser && currentUser.permisos) {
       var mods = (currentUser.permisos.finanzas && currentUser.permisos.finanzas.modulos) || {};
