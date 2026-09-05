@@ -6218,9 +6218,11 @@ function renderDeudaList() {
     var cat = g[0];
     var items = activos.filter(function(x){ return (x.categoria||'amortizable')===cat; });
     if(!items.length) return;
-    // De mayor a menor saldo. Como renderDeudaList corre en cada render
-    // (y loadAll+renderPlaneacion se llaman tras cada pago), el orden se
-    // reacomoda solo en cuanto cambia un saldo.
+    // De mayor a menor saldo vigente.
+    // En tarjetas ese saldo lo escribe guardarCortes() con el saldo del corte
+    // del mes, y en creditos baja al marcar cada mensualidad. Como este render
+    // corre despues de cada loadAll(), el orden se reacomoda solo: al capturar
+    // los cortes de un mes nuevo, las tarjetas se reordenan sin tocar nada.
     items.sort(function(a,b){
       var d = (parseFloat(b.saldo_actual)||0) - (parseFloat(a.saldo_actual)||0);
       if(d !== 0) return d;
@@ -6285,6 +6287,11 @@ function renderDeudaList() {
           etiqueta = (saldo>linea)
             ? '<span style="color:var(--danger);font-weight:700">Sobregirada '+fmt(saldo-linea)+'</span> · línea '+fmt(linea)
             : uso+'% usado · <span style="color:var(--ok)">disponible '+fmt(linea-saldo)+'</span>';
+          // De donde viene el saldo: del ultimo corte capturado, o de captura manual
+          var _uc = ultimoCorte(x.id);
+          etiqueta += _uc
+            ? ' · <span style="color:var(--dim)">corte '+nombrePeriodo(_uc.periodo)+'</span>'
+            : ' · <span style="color:var(--warn)">sin corte</span>';
         } else {
           etiqueta = '<span style="color:var(--warn)">Sin línea de crédito capturada</span>';
         }
