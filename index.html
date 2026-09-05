@@ -945,7 +945,12 @@ body.tema-claro .sub-nav{background:#FFFFFF}
       <input class="form-input" id="deu-pago-mensual" type="number" placeholder="0.00" step="0.01"></div>
     <div class="form-group" id="grp-deu-pago-minimo" style="display:none"><div class="form-label">Pago mínimo</div>
       <input class="form-input" id="deu-pago-minimo" type="number" placeholder="0.00" step="0.01"></div>
-    <div class="form-group"><div class="form-label">Fecha próximo pago</div>
+    <div class="form-group" id="grp-deu-dia-corte" style="display:none"><div class="form-label">Día de corte (1-31)</div>
+      <input class="form-input" id="deu-dia-corte" type="number" min="1" max="31" step="1" placeholder="Ej. 5"></div>
+    <div class="form-group"><div class="form-label">Día de pago (1-31)</div>
+      <input class="form-input" id="deu-dia-pago" type="number" min="1" max="31" step="1" placeholder="Ej. 20">
+      <div style="font-size:10px;color:var(--dim);margin-top:4px">Se recalcula solo cada mes. Es lo que usan los recordatorios.</div></div>
+    <div class="form-group"><div class="form-label">Fecha próximo pago (si no es día fijo)</div>
       <input class="form-input" id="deu-prox-pago" type="date"></div>
     <div class="form-group"><div class="form-label">Fecha vencimiento total</div>
       <input class="form-input" id="deu-vencimiento" type="date"></div>
@@ -5591,6 +5596,29 @@ function sumarMesISO(fechaISO, meses) {
   return destino.getFullYear()+'-'+mm+'-'+dd;
 }
 
+// Proxima ocurrencia de un dia del mes. Si el mes no tiene ese dia
+// (31 en febrero), cae al ultimo dia real. Se recalcula sola: no se pudre.
+function proximoPorDia(dia) {
+  if(!dia || dia<1 || dia>31) return null;
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var y = hoy.getFullYear(), m = hoy.getMonth();
+  for(var k=0;k<3;k++){
+    var ultimo = new Date(y, m+1, 0).getDate();
+    var cand = new Date(y, m, Math.min(dia, ultimo));
+    if(cand >= hoy){
+      var mm=String(cand.getMonth()+1).padStart(2,'0'), dd=String(cand.getDate()).padStart(2,'0');
+      return cand.getFullYear()+'-'+mm+'-'+dd;
+    }
+    m++; if(m>11){ m=0; y++; }
+  }
+  return null;
+}
+
+// Fecha efectiva: el dia fijo manda; si no hay, la fecha suelta.
+function fechaPagoEfectiva(x) {
+  return proximoPorDia(x.dia_pago) || x.fecha_proximo_pago || null;
+}
+
 // Interes mensual estimado = saldo * tasa anual / 12. Es estimacion simple,
 // no sustituye el estado de cuenta del acreedor.
 function interesMensualEstimado(x) {
@@ -5616,6 +5644,7 @@ function toggleCamposDeuda() {
   var set = function(id, visible){ var e=document.getElementById(id); if(e) e.style.display = visible?'':'none'; };
   set('grp-deu-linea',        esRev);
   set('grp-deu-pago-minimo',  esRev);
+  set('grp-deu-dia-corte',    esRev);
   set('grp-deu-original',     !esRev);
   set('grp-deu-pago-mensual', !esRev);
 }
@@ -5686,7 +5715,8 @@ function renderDeudaList() {
       var isAdmin = currentUser.rol==='director'||currentUser.rol==='admin';
       var expId   = 'deu-exp-'+x.id;
       var saldo   = parseFloat(x.saldo_actual)||0;
-      var dias    = diasParaVencer(x.fecha_proximo_pago);
+      var fEfec   = fechaPagoEfectiva(x);
+      var dias    = diasParaVencer(fEfec);
       var intMes  = interesMensualEstimado(x);
       var diasStr = '';
       if(dias!==null){
@@ -5743,7 +5773,9 @@ function renderDeudaList() {
       }
       if(x.tasa_interes)       html += '<div><div class="stat-label">Tasa anual</div><div style="font-size:12px">'+x.tasa_interes+'%</div></div>';
       if(intMes>0)             html += '<div><div class="stat-label">Interés estimado</div><div style="font-size:12px">'+fmt(intMes)+'/mes</div></div>';
-      if(x.fecha_proximo_pago) html += '<div><div class="stat-label">Próximo pago</div><div style="font-size:12px">'+fmtDate(x.fecha_proximo_pago)+'</div></div>';
+      if(fEfec) html += '<div><div class="stat-label">Próximo pago</div><div style="font-size:12px">'+fmtDate(fEfec)
+                      + (x.dia_pago?'<span style="color:var(--dim);font-size:10px"> · día '+x.dia_pago+' de cada mes</span>':'')+'</div></div>';
+      if(x.dia_corte)          html += '<div><div class="stat-label">Día de corte</div><div style="font-size:12px">'+x.dia_corte+' de cada mes</div></div>';
       if(x.fecha_vencimiento)  html += '<div><div class="stat-label">Vencimiento total</div><div style="font-size:12px">'+fmtDate(x.fecha_vencimiento)+'</div></div>';
       if(x.observaciones)      html += '<div style="grid-column:1/-1"><div class="stat-label">Notas</div><div style="font-size:12px;color:var(--text2)">'+escDeu(x.observaciones)+'</div></div>';
       html += '</div>';
@@ -6067,7 +6099,7 @@ function openNewDeuda() {
   _editDeudaId = null;
   document.querySelector('#sheet-deuda .sheet-title').textContent='Nueva Deuda Financiera';
   ['deu-acreedor','deu-obs'].forEach(function(id){document.getElementById(id).value='';});
-  ['deu-original','deu-saldo','deu-tasa','deu-pago-mensual','deu-linea','deu-pago-minimo'].forEach(function(id){
+  ['deu-original','deu-saldo','deu-tasa','deu-pago-mensual','deu-linea','deu-pago-minimo','deu-dia-corte','deu-dia-pago'].forEach(function(id){
     var e=document.getElementById(id); if(e) e.value='';
   });
   document.getElementById('deu-prox-pago').value='';
@@ -6093,6 +6125,8 @@ function editDeuda(id) {
   document.getElementById('deu-pago-mensual').value=x.pago_mensual||'';
   var eL=document.getElementById('deu-linea');       if(eL) eL.value=x.linea_credito||'';
   var eM=document.getElementById('deu-pago-minimo'); if(eM) eM.value=x.pago_minimo||'';
+  var eC=document.getElementById('deu-dia-corte');   if(eC) eC.value=x.dia_corte||'';
+  var eP=document.getElementById('deu-dia-pago');    if(eP) eP.value=x.dia_pago||'';
   document.getElementById('deu-prox-pago').value=x.fecha_proximo_pago||'';
   document.getElementById('deu-vencimiento').value=x.fecha_vencimiento||'';
   document.getElementById('deu-negocio').value=x.negocio||'RAL';
@@ -6125,6 +6159,8 @@ async function saveDeuda() {
     pago_mensual:parseFloat(document.getElementById('deu-pago-mensual').value)||null,
     linea_credito:linea,
     pago_minimo:parseFloat(document.getElementById('deu-pago-minimo') ? document.getElementById('deu-pago-minimo').value : '')||null,
+    dia_corte:parseInt(document.getElementById('deu-dia-corte') ? document.getElementById('deu-dia-corte').value : '',10)||null,
+    dia_pago:parseInt(document.getElementById('deu-dia-pago') ? document.getElementById('deu-dia-pago').value : '',10)||null,
     fecha_proximo_pago:document.getElementById('deu-prox-pago').value||null,
     fecha_vencimiento:document.getElementById('deu-vencimiento').value||null,
     negocio:document.getElementById('deu-negocio').value,
