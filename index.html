@@ -5657,6 +5657,16 @@ function toggleCamposDeuda() {
   set('grp-deu-pago-mensual', !esRev);
 }
 
+// Quien puede editar deuda: admin/director, o quien tenga el permiso
+// granular plan_deuda. Evita tener que volver admin a alguien solo para
+// que administre creditos.
+function puedeEditarDeuda() {
+  if(!currentUser) return false;
+  if(currentUser.rol==='admin' || currentUser.rol==='director') return true;
+  var m = (currentUser.permisos && currentUser.permisos.finanzas && currentUser.permisos.finanzas.modulos) || {};
+  return !!m.plan_deuda;
+}
+
 // ── AMORTIZACIÓN ──────────────────────────────────────────────────────
 function amortDeDeuda(deudaId) {
   return (amortData||[])
@@ -5867,7 +5877,7 @@ function renderDeudaList() {
     html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
 
     items.forEach(function(x,i){
-      var isAdmin = currentUser.rol==='director'||currentUser.rol==='admin';
+      var isAdmin = puedeEditarDeuda();
       var expId   = 'deu-exp-'+x.id;
       var saldo   = parseFloat(x.saldo_actual)||0;
       var fEfec   = fechaPagoEfectiva(x);
