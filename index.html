@@ -909,6 +909,21 @@ body.tema-claro .sub-nav{background:#FFFFFF}
 </div>
 
 <!-- SHEET: Nueva Deuda Financiera -->
+<div class="sheet-overlay" id="sheet-cortes">
+  <div class="sheet" style="max-width:860px">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title">Cortes de tarjetas</div>
+        <button class="sheet-close" onclick="closeSheet('cortes')">✕</button>
+      </div>
+    </div>
+    <div id="cortes-body"></div>
+    <button class="btn btn-accent" id="cortes-save-btn" onclick="guardarCortes()">Guardar cortes</button>
+    <button class="btn btn-ghost" onclick="closeSheet('cortes')">Cancelar</button>
+  </div>
+</div>
+
 <div class="sheet-overlay" id="sheet-deuda">
   <div class="sheet">
     <div class="sheet-handle"></div>
@@ -1439,7 +1454,7 @@ async function loadFiscalizacion() {
 // IMPORTANTE: pagos en Planeación NO generan movimientos en Control Presupuestal
 async function loadPlaneacion() {
   const lim = PAGE_LIMITS;
-  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu, _amort] = await Promise.all([
+  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu, _amort, _cortes] = await Promise.all([
     dbSafe('GET', 'cuentas_por_pagar?order=created_at.desc&limit='  + lim.cuentas_por_pagar,  null, 'cxp'),
     dbSafe('GET', 'cuentas_por_cobrar?order=created_at.desc&limit=' + lim.cuentas_por_cobrar, null, 'cxc'),
     dbSafe('GET', 'deuda_financiera?order=created_at.desc&limit='         + lim.deuda_financiera,   null, 'deuda'),
@@ -1447,6 +1462,7 @@ async function loadPlaneacion() {
     dbSafe('GET', 'solicitud_pago_items?order=prioridad.asc',                                       null, 'solicitud_items'),
     dbSafe('GET', 'deuda_pagos?order=fecha.desc&limit=500',                                        null, 'deuda_pagos'),
     dbSafe('GET', 'deuda_amortizacion?order=num_pago.asc&limit=2000',                             null, 'amortizacion'),
+    dbSafe('GET', 'tarjeta_cortes?order=periodo.desc&limit=500',                                  null, 'tarjeta_cortes'),
   ]);
   cxpData        = _cxp;
   cxcData        = _cxc;
@@ -1455,6 +1471,7 @@ async function loadPlaneacion() {
   solicitudItems  = _solItems;
   pagosDeudaData  = _pagosDeu || [];
   amortData       = _amort || [];
+  cortesData      = _cortes || [];
   console.log('[Planeación] CxP:' + cxpData.length + ' CxC:' + cxcData.length + ' Deuda:' + deudaData.length + ' Solicitudes:' + solicitudesPago.length);
 }
 
@@ -3140,6 +3157,8 @@ let cxcData = [];       // cuentas por cobrar
 let deudaData = [];     // deuda financiera
 let pagosDeudaData = []; // deuda_pagos: historial de pagos
 let amortData = [];      // deuda_amortizacion: tablas de amortizacion
+let cortesData = [];     // tarjeta_cortes: cortes mensuales de tarjetas
+let _periodoCaptura = null;
 let _planTab = 'cxp';  // sub-tab activo
 let _movFiltroObra = { egreso: '', ingreso: '' }; // '' = todos los proyectos
 let cuentaConcilActiva = null; // cuenta_id currently selected in conciliacion
@@ -5667,6 +5686,212 @@ function puedeEditarDeuda() {
   return !!m.plan_deuda;
 }
 
+// ── TARJETAS: cortes mensuales ────────────────────────────────────────
+function cortesDeTarjeta(deudaId) {
+  return (cortesData||[])
+    .filter(function(c){ return c.deuda_id===deudaId; })
+    .sort(function(a,b){ return (b.periodo||'').localeCompare(a.periodo||''); });
+}
+function ultimoCorte(deudaId) {
+  var l = cortesDeTarjeta(deudaId);
+  return l.length ? l[0] : null;
+}
+function periodoActual() {
+  var d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+}
+function nombrePeriodo(p) {
+  var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var x=String(p).split('-');
+  return M[parseInt(x[1],10)-1]+' '+x[0];
+}
+// Fecha concreta de un dia del mes dentro de un periodo dado
+function fechaEnPeriodo(periodo, dia) {
+  if(!dia) return '';
+  var x=String(periodo).split('-'), y=+x[0], m=+x[1]-1;
+  var ult=new Date(y,m+1,0).getDate();
+  var d=new Date(y,m,Math.min(dia,ult));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// ── Hoja de captura: todas las tarjetas de un mes en una sola pantalla ──
+function openCapturaCortes(periodo) {
+  _periodoCaptura = periodo || periodoActual();
+  var tarjetas = (deudaData||[]).filter(function(d){
+    return d.categoria==='revolvente' && d.activo!==false;
+  }).sort(function(a,b){ return (b.saldo_actual||0)-(a.saldo_actual||0); });
+
+  var h = '<div style="font-size:12px;color:var(--dim);margin-bottom:10px">'
+        + 'Captura lo que dice el estado de cuenta de cada tarjeta. '
+        + 'Lo que dejes vacío no se guarda.</div>';
+
+  h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
+  h += '<button onclick="cambiarPeriodoCaptura(-1)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer">‹</button>';
+  h += '<div style="flex:1;text-align:center;font-weight:700;font-size:14px">Corte de '+nombrePeriodo(_periodoCaptura)+'</div>';
+  h += '<button onclick="cambiarPeriodoCaptura(1)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);cursor:pointer">›</button>';
+  h += '</div>';
+
+  h += '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+  h += '<tr style="color:var(--dim);text-align:left">'
+     + '<th style="padding:4px">Tarjeta</th><th>F. corte</th><th>F. límite</th>'
+     + '<th style="text-align:right">Saldo</th><th style="text-align:right">Mínimo</th>'
+     + '<th style="text-align:right">Sin intereses</th></tr>';
+
+  tarjetas.forEach(function(t){
+    var ex = (cortesData||[]).find(function(c){ return c.deuda_id===t.id && c.periodo===_periodoCaptura; });
+    var inp = function(id,val,tipo,ph){
+      return '<input id="'+id+'" type="'+tipo+'" '+(tipo==='number'?'step="0.01" min="0"':'')
+           + ' value="'+(val||'')+'" placeholder="'+(ph||'')+'"'
+           + ' style="width:100%;padding:6px 7px;border-radius:6px;border:1px solid var(--border);'
+           + 'background:var(--card2);color:var(--text);font-size:11px;font-family:inherit;box-sizing:border-box'
+           + (tipo==='number'?';text-align:right':'')+'">';
+    };
+    var nom = escDeu(t.acreedor) + (t.observaciones ? ' <span style="color:var(--dim)">'+escDeu(t.observaciones.substring(0,14))+'</span>' : '');
+    h += '<tr style="border-bottom:1px solid var(--border)">';
+    h += '<td style="padding:6px 4px;min-width:110px">'+nom
+       + '<div style="font-size:9px;color:var(--dim)">línea '+fmt(t.linea_credito||0)+'</div></td>';
+    h += '<td style="min-width:120px">'+inp('cor-fc-'+t.id, ex?ex.fecha_corte:fechaEnPeriodo(_periodoCaptura,t.dia_corte),'date')+'</td>';
+    h += '<td style="min-width:120px">'+inp('cor-fl-'+t.id, ex?ex.fecha_limite:fechaEnPeriodo(_periodoCaptura,t.dia_pago),'date')+'</td>';
+    h += '<td style="min-width:90px">' +inp('cor-sa-'+t.id, ex?ex.saldo_corte:'','number','0.00')+'</td>';
+    h += '<td style="min-width:85px">' +inp('cor-pm-'+t.id, ex?ex.pago_minimo:'','number','0.00')+'</td>';
+    h += '<td style="min-width:95px">' +inp('cor-pt-'+t.id, ex?ex.pago_no_intereses:'','number','0.00')+'</td>';
+    h += '</tr>';
+  });
+  h += '</table></div>';
+  h += '<div style="font-size:10px;color:var(--dim);margin-top:8px">'
+     + 'El saldo de cada tarjeta se actualiza con lo que captures aquí. '
+     + 'Si es la primera vez que pones la fecha de corte, se guarda el día para prellenarlo los próximos meses.</div>';
+
+  document.getElementById('cortes-body').innerHTML = h;
+  openSheet('cortes');
+}
+
+function cambiarPeriodoCaptura(delta) {
+  var x=String(_periodoCaptura).split('-'), y=+x[0], m=+x[1]-1+delta;
+  var d=new Date(y,m,1);
+  openCapturaCortes(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01');
+}
+
+async function guardarCortes() {
+  var btn=document.getElementById('cortes-save-btn');
+  btn.textContent='Guardando...'; btn.disabled=true;
+  var tarjetas=(deudaData||[]).filter(function(d){ return d.categoria==='revolvente' && d.activo!==false; });
+  var g=function(p,id){ var e=document.getElementById(p+id); return e?e.value:''; };
+  var n=0, err=0;
+  for(var i=0;i<tarjetas.length;i++){
+    var t=tarjetas[i];
+    var saldo=parseFloat(g('cor-sa-',t.id));
+    if(isNaN(saldo)) continue;                       // sin saldo no hay corte
+    var payload={
+      deuda_id:t.id, periodo:_periodoCaptura,
+      fecha_corte:g('cor-fc-',t.id)||null,
+      fecha_limite:g('cor-fl-',t.id)||null,
+      saldo_corte:saldo,
+      pago_minimo:parseFloat(g('cor-pm-',t.id))||null,
+      pago_no_intereses:parseFloat(g('cor-pt-',t.id))||null,
+      created_by:currentUser.nombre
+    };
+    try{
+      var ex=(cortesData||[]).find(function(c){ return c.deuda_id===t.id && c.periodo===_periodoCaptura; });
+      if(ex) await db('PATCH','tarjeta_cortes?id=eq.'+ex.id, payload);
+      else   await db('POST','tarjeta_cortes', payload);
+
+      // El saldo y el minimo de la tarjeta se actualizan desde el corte
+      var patch={ saldo_actual:saldo };
+      if(payload.pago_minimo) patch.pago_minimo=payload.pago_minimo;
+      // Aprender el dia de corte la primera vez
+      if(!t.dia_corte && payload.fecha_corte) patch.dia_corte=parseInt(payload.fecha_corte.split('-')[2],10);
+      if(!t.dia_pago  && payload.fecha_limite) patch.dia_pago =parseInt(payload.fecha_limite.split('-')[2],10);
+      await db('PATCH','deuda_financiera?id=eq.'+t.id, patch);
+      n++;
+    }catch(e){ err++; if(typeof logError==='function') logError('guardarCortes:'+t.acreedor,e); }
+  }
+  btn.textContent='Guardar cortes'; btn.disabled=false;
+  if(n) showToast('✅ '+n+' corte(s) guardado(s)'+(err?' · '+err+' con error':''));
+  else  showToast('No capturaste ningún saldo', true);
+  closeSheet('cortes'); await loadAll(); renderPlaneacion();
+}
+
+// Registrar el pago del corte. tipo: 'minimo' | 'total' | 'otro'
+async function pagarCorte(corteId, tipo) {
+  var c=(cortesData||[]).find(function(x){ return x.id===corteId; });
+  if(!c) return;
+  var t=deudaData.find(function(d){ return d.id===c.deuda_id; });
+  var monto = tipo==='minimo' ? parseFloat(c.pago_minimo)||0
+            : tipo==='total'  ? parseFloat(c.pago_no_intereses)||0 : 0;
+  if(tipo==='otro'){
+    var r=prompt('¿Cuánto pagaste de '+(t?t.acreedor:'la tarjeta')+'?');
+    if(r===null) return;
+    monto=parseFloat(r)||0;
+  }
+  if(monto<=0){ showToast('Monto inválido',true); return; }
+
+  var saldoPrevio=parseFloat(t?t.saldo_actual:0)||0;
+  var nuevoSaldo=Math.max(0, saldoPrevio-monto);
+  var estado = (c.pago_no_intereses && monto>=parseFloat(c.pago_no_intereses)) ? 'pagado' : 'parcial';
+  var txt='Registrar pago de '+(t?t.acreedor:'')+'\n\n'
+        + 'Monto: '+fmt(monto)+'\n'
+        + 'Saldo: '+fmt(saldoPrevio)+' → '+fmt(nuevoSaldo)+'\n\n'
+        + (estado==='parcial' && c.pago_no_intereses
+            ? 'Es pago parcial: el resto genera intereses a '+(t&&t.tasa_interes?t.tasa_interes+'% anual.':'la tasa de la tarjeta.')
+            : 'Cubre el total: no genera intereses.');
+  if(!confirm(txt)) return;
+
+  try{
+    await db('POST','deuda_pagos',{
+      deuda_id:c.deuda_id, fecha:new Date().toISOString().substring(0,10),
+      capital:monto, intereses:0, comisiones:0, saldo_despues:nuevoSaldo,
+      observaciones:'Pago del corte '+nombrePeriodo(c.periodo),
+      created_by:currentUser.nombre
+    });
+    await db('PATCH','tarjeta_cortes?id=eq.'+corteId,{
+      pagado:(parseFloat(c.pagado)||0)+monto,
+      fecha_pago:new Date().toISOString().substring(0,10), estado:estado
+    });
+    await db('PATCH','deuda_financiera?id=eq.'+c.deuda_id,{ saldo_actual:nuevoSaldo });
+    showToast('✅ Pago registrado — saldo '+fmt(nuevoSaldo));
+    await loadAll(); renderPlaneacion();
+  }catch(e){ showToast('Error: '+e.message,true); }
+}
+
+// Bloque del corte dentro del detalle de la tarjeta
+function renderCorteTarjeta(x, isAdmin) {
+  var lista=cortesDeTarjeta(x.id);
+  var c=lista.length?lista[0]:null;
+  var h='<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
+  h+='<div style="font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.04em;margin-bottom:6px">ÚLTIMO CORTE</div>';
+  if(!c){
+    h+='<div style="font-size:11px;color:var(--dim)">Sin cortes capturados.'
+      +(isAdmin?' Usa el botón <b>Capturar cortes</b> arriba.':'')+'</div>';
+  } else {
+    var falta=Math.max(0,(parseFloat(c.pago_no_intereses)||0)-(parseFloat(c.pagado)||0));
+    var colEstado=c.estado==='pagado'?'var(--ok)':(c.estado==='parcial'?'var(--warn)':'var(--danger)');
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px">';
+    h+='<div><div class="stat-label">Periodo</div><div style="font-size:12px">'+nombrePeriodo(c.periodo)+'</div></div>';
+    h+='<div><div class="stat-label">Estado</div><div style="font-size:12px;color:'+colEstado+';font-weight:700">'+c.estado+'</div></div>';
+    h+='<div><div class="stat-label">Saldo al corte</div><div style="font-size:12px">'+fmt(c.saldo_corte)+'</div></div>';
+    if(c.fecha_limite) h+='<div><div class="stat-label">Fecha límite</div><div style="font-size:12px">'+fmtDate(c.fecha_limite)+'</div></div>';
+    if(c.pago_minimo)       h+='<div><div class="stat-label">Pago mínimo</div><div style="font-size:12px">'+fmt(c.pago_minimo)+'</div></div>';
+    if(c.pago_no_intereses) h+='<div><div class="stat-label">Sin intereses</div><div style="font-size:12px">'+fmt(c.pago_no_intereses)+'</div></div>';
+    if(parseFloat(c.pagado)>0) h+='<div><div class="stat-label">Pagado</div><div style="font-size:12px;color:var(--ok)">'+fmt(c.pagado)+'</div></div>';
+    h+='</div>';
+    if(isAdmin && c.estado!=='pagado'){
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">';
+      if(c.pago_minimo)       h+='<button onclick="pagarCorte(\''+c.id+'\',\'minimo\')" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:11px;cursor:pointer">Pagué el mínimo ('+fmt(c.pago_minimo)+')</button>';
+      if(c.pago_no_intereses) h+='<button onclick="pagarCorte(\''+c.id+'\',\'total\')" style="padding:6px 11px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Pagué todo ('+fmt(falta)+')</button>';
+      h+='<button onclick="pagarCorte(\''+c.id+'\',\'otro\')" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:11px;cursor:pointer">Otro monto</button>';
+      h+='</div>';
+    }
+    if(lista.length>1){
+      h+='<div style="font-size:10px;color:var(--dim);margin-top:8px">Historial: ';
+      h+=lista.slice(0,6).map(function(z){ return nombrePeriodo(z.periodo)+' '+fmt(z.saldo_corte); }).join(' · ');
+      h+='</div>';
+    }
+  }
+  h+='</div>';
+  return h;
+}
+
 // ── AMORTIZACIÓN ──────────────────────────────────────────────────────
 function amortDeDeuda(deudaId) {
   return (amortData||[])
@@ -5870,9 +6095,11 @@ function renderDeudaList() {
     items.sort(function(a,b){ return interesMensualEstimado(b)-interesMensualEstimado(a); });
 
     var saldoGrupo = items.reduce(function(s,x){ return s+(parseFloat(x.saldo_actual)||0); },0);
-    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 6px">'
+    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 6px;gap:8px;flex-wrap:wrap">'
       + '<div><span style="font-size:12px;font-weight:700">'+g[1]+'</span> '
       + '<span style="font-size:10px;color:var(--dim)">· '+items.length+' · '+g[2]+'</span></div>'
+      + (cat==='revolvente' && (currentUser.rol==='admin'||currentUser.rol==='director'||puedeEditarDeuda())
+          ? '<button onclick="openCapturaCortes()" style="padding:5px 11px;border-radius:8px;border:1px solid var(--purple);background:rgba(155,126,255,.12);color:var(--purple);font-size:11px;font-weight:600;cursor:pointer">📋 Capturar cortes</button>' : '')
       + '<span style="font-size:12px;font-weight:700;color:var(--purple)">'+fmt(saldoGrupo)+'</span></div>';
     html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
 
@@ -5951,8 +6178,9 @@ function renderDeudaList() {
       if(x.observaciones)      html += '<div style="grid-column:1/-1"><div class="stat-label">Notas</div><div style="font-size:12px;color:var(--text2)">'+escDeu(x.observaciones)+'</div></div>';
       html += '</div>';
 
-      // ── Tabla de amortizacion (si tiene) ──
-      html += renderAmortizacion(x, isAdmin);
+      // ── Corte del mes (tarjetas) o tabla de amortizacion (creditos) ──
+      if(cat==='revolvente') html += renderCorteTarjeta(x, isAdmin);
+      else                   html += renderAmortizacion(x, isAdmin);
 
       // ── Historial de pagos ──
       var pagos = pagosDeDeuda(x.id);
