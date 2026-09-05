@@ -6218,7 +6218,14 @@ function renderDeudaList() {
     var cat = g[0];
     var items = activos.filter(function(x){ return (x.categoria||'amortizable')===cat; });
     if(!items.length) return;
-    items.sort(function(a,b){ return interesMensualEstimado(b)-interesMensualEstimado(a); });
+    // De mayor a menor saldo. Como renderDeudaList corre en cada render
+    // (y loadAll+renderPlaneacion se llaman tras cada pago), el orden se
+    // reacomoda solo en cuanto cambia un saldo.
+    items.sort(function(a,b){
+      var d = (parseFloat(b.saldo_actual)||0) - (parseFloat(a.saldo_actual)||0);
+      if(d !== 0) return d;
+      return String(a.acreedor||'').localeCompare(String(b.acreedor||''));
+    });
 
     var saldoGrupo = items.reduce(function(s,x){ return s+(parseFloat(x.saldo_actual)||0); },0);
     var lineaGrupo = items.reduce(function(s,x){ return s+(parseFloat(x.linea_credito)||0); },0);
