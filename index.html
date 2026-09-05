@@ -6095,12 +6095,36 @@ function renderDeudaList() {
     items.sort(function(a,b){ return interesMensualEstimado(b)-interesMensualEstimado(a); });
 
     var saldoGrupo = items.reduce(function(s,x){ return s+(parseFloat(x.saldo_actual)||0); },0);
+    var lineaGrupo = items.reduce(function(s,x){ return s+(parseFloat(x.linea_credito)||0); },0);
+    var dispGrupo  = items.reduce(function(s,x){
+      var l=parseFloat(x.linea_credito)||0, q=parseFloat(x.saldo_actual)||0;
+      return s + (l>0 ? Math.max(0, l-q) : 0);
+    },0);
+    var sobreGrupo = items.reduce(function(s,x){
+      var l=parseFloat(x.linea_credito)||0, q=parseFloat(x.saldo_actual)||0;
+      return s + (l>0 && q>l ? q-l : 0);
+    },0);
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 6px;gap:8px;flex-wrap:wrap">'
       + '<div><span style="font-size:12px;font-weight:700">'+g[1]+'</span> '
       + '<span style="font-size:10px;color:var(--dim)">· '+items.length+' · '+g[2]+'</span></div>'
       + (cat==='revolvente' && (currentUser.rol==='admin'||currentUser.rol==='director'||puedeEditarDeuda())
           ? '<button onclick="openCapturaCortes()" style="padding:5px 11px;border-radius:8px;border:1px solid var(--purple);background:rgba(155,126,255,.12);color:var(--purple);font-size:11px;font-weight:600;cursor:pointer">📋 Capturar cortes</button>' : '')
       + '<span style="font-size:12px;font-weight:700;color:var(--purple)">'+fmt(saldoGrupo)+'</span></div>';
+    if(cat==='revolvente' && lineaGrupo>0){
+      var usoGrupo = Math.min(100, Math.round(saldoGrupo/lineaGrupo*100));
+      var colG = usoGrupo>=90?'var(--danger)':(usoGrupo>=70?'var(--warn)':'var(--purple)');
+      html += '<div style="border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;background:var(--card2)">';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px">'
+            + '<span style="color:var(--dim)">Utilizado de la línea</span>'
+            + '<span style="font-weight:700;color:'+colG+'">'+usoGrupo+'%</span></div>';
+      html += '<div style="background:var(--bg);border-radius:5px;height:7px;overflow:hidden">'
+            + '<div style="background:'+colG+';height:7px;width:'+usoGrupo+'%"></div></div>';
+      html += '<div style="display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:11px;flex-wrap:wrap">'
+            + '<span>Usado <b>'+fmt(saldoGrupo)+'</b> de '+fmt(lineaGrupo)+'</span>'
+            + '<span style="color:var(--ok)">Disponible <b>'+fmt(dispGrupo)+'</b></span></div>';
+      if(sobreGrupo>0) html += '<div style="font-size:10px;color:var(--danger);margin-top:5px;font-weight:700">⚠️ Sobregiro de '+fmt(sobreGrupo)+' en una o más tarjetas</div>';
+      html += '</div>';
+    }
     html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
 
     items.forEach(function(x,i){
@@ -6125,7 +6149,9 @@ function renderDeudaList() {
           var uso = Math.min(100, Math.round(saldo/linea*100));
           var col = uso>=90?'var(--danger)':(uso>=70?'var(--warn)':'var(--purple)');
           barra    = '<div style="margin-top:4px;background:var(--bg);border-radius:4px;height:4px;max-width:180px"><div style="background:'+col+';height:4px;border-radius:4px;width:'+uso+'%"></div></div>';
-          etiqueta = uso+'% de la línea usada · disponible '+fmt(Math.max(0,linea-saldo));
+          etiqueta = (saldo>linea)
+            ? '<span style="color:var(--danger);font-weight:700">Sobregirada '+fmt(saldo-linea)+'</span> · línea '+fmt(linea)
+            : uso+'% usado · <span style="color:var(--ok)">disponible '+fmt(linea-saldo)+'</span>';
         } else {
           etiqueta = '<span style="color:var(--warn)">Sin línea de crédito capturada</span>';
         }
@@ -6163,7 +6189,12 @@ function renderDeudaList() {
       html += '<div id="'+expId+'" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border);background:var(--bg)">';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:10px 0">';
       if(cat==='revolvente'){
-        if(x.linea_credito) html += '<div><div class="stat-label">Línea de crédito</div><div style="font-size:12px">'+fmt(x.linea_credito)+'</div></div>';
+        if(x.linea_credito){
+          var _l=parseFloat(x.linea_credito)||0, _d=_l-saldo;
+          html += '<div><div class="stat-label">Línea de crédito</div><div style="font-size:12px">'+fmt(_l)+'</div></div>';
+          html += '<div><div class="stat-label">Utilizado</div><div style="font-size:12px;font-weight:700">'+fmt(saldo)+' <span style="color:var(--dim);font-weight:400">('+Math.round(saldo/_l*100)+'%)</span></div></div>';
+          html += '<div><div class="stat-label">Disponible</div><div style="font-size:12px;font-weight:700;color:'+(_d>0?'var(--ok)':'var(--danger)')+'">'+fmt(_d)+'</div></div>';
+        }
         if(x.pago_minimo)   html += '<div><div class="stat-label">Pago mínimo</div><div style="font-size:12px">'+fmt(x.pago_minimo)+'</div></div>';
       } else {
         if(x.monto_original) html += '<div><div class="stat-label">Monto original</div><div style="font-size:12px">'+fmt(x.monto_original)+'</div></div>';
