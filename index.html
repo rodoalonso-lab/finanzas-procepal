@@ -928,14 +928,23 @@ body.tema-claro .sub-nav{background:#FFFFFF}
         <option value="factoraje">Factoraje</option>
         <option value="otro">Otro</option>
       </select></div>
-    <div class="form-group"><div class="form-label">Monto Original *</div>
+    <div class="form-group"><div class="form-label">Categoría *</div>
+      <select class="form-input" id="deu-categoria" onchange="toggleCamposDeuda()">
+        <option value="amortizable">Crédito amortizable (saldo solo baja)</option>
+        <option value="revolvente">Revolvente / tarjeta (saldo sube y baja)</option>
+      </select></div>
+    <div class="form-group" id="grp-deu-original"><div class="form-label">Monto Original *</div>
       <input class="form-input" id="deu-original" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group" id="grp-deu-linea" style="display:none"><div class="form-label">Línea de crédito</div>
+      <input class="form-input" id="deu-linea" type="number" placeholder="Límite autorizado" step="0.01"></div>
     <div class="form-group"><div class="form-label">Saldo Actual *</div>
       <input class="form-input" id="deu-saldo" type="number" placeholder="0.00" step="0.01"></div>
     <div class="form-group"><div class="form-label">Tasa de interés anual (%)</div>
       <input class="form-input" id="deu-tasa" type="number" placeholder="0.00" step="0.01"></div>
-    <div class="form-group"><div class="form-label">Pago mensual</div>
+    <div class="form-group" id="grp-deu-pago-mensual"><div class="form-label">Pago mensual</div>
       <input class="form-input" id="deu-pago-mensual" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group" id="grp-deu-pago-minimo" style="display:none"><div class="form-label">Pago mínimo</div>
+      <input class="form-input" id="deu-pago-minimo" type="number" placeholder="0.00" step="0.01"></div>
     <div class="form-group"><div class="form-label">Fecha próximo pago</div>
       <input class="form-input" id="deu-prox-pago" type="date"></div>
     <div class="form-group"><div class="form-label">Fecha vencimiento total</div>
@@ -1425,18 +1434,20 @@ async function loadFiscalizacion() {
 // IMPORTANTE: pagos en Planeación NO generan movimientos en Control Presupuestal
 async function loadPlaneacion() {
   const lim = PAGE_LIMITS;
-  const [_cxp, _cxc, _deuda, _sols, _solItems] = await Promise.all([
+  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu] = await Promise.all([
     dbSafe('GET', 'cuentas_por_pagar?order=created_at.desc&limit='  + lim.cuentas_por_pagar,  null, 'cxp'),
     dbSafe('GET', 'cuentas_por_cobrar?order=created_at.desc&limit=' + lim.cuentas_por_cobrar, null, 'cxc'),
     dbSafe('GET', 'deuda_financiera?order=created_at.desc&limit='         + lim.deuda_financiera,   null, 'deuda'),
     dbSafe('GET', 'solicitudes_pago?order=created_at.desc&limit=50',                                null, 'solicitudes_pago'),
     dbSafe('GET', 'solicitud_pago_items?order=prioridad.asc',                                       null, 'solicitud_items'),
+    dbSafe('GET', 'deuda_pagos?order=fecha.desc&limit=500',                                        null, 'deuda_pagos'),
   ]);
   cxpData        = _cxp;
   cxcData        = _cxc;
   deudaData      = _deuda;
   solicitudesPago = _sols;
   solicitudItems  = _solItems;
+  pagosDeudaData  = _pagosDeu || [];
   console.log('[Planeación] CxP:' + cxpData.length + ' CxC:' + cxcData.length + ' Deuda:' + deudaData.length + ' Solicitudes:' + solicitudesPago.length);
 }
 
@@ -3120,6 +3131,7 @@ let ejecucionData = []; // v_ejecucion_por_obra
 let ejecucionDetalleData = []; // v_ejecucion_presupuestal
 let cxcData = [];       // cuentas por cobrar
 let deudaData = [];     // deuda financiera
+let pagosDeudaData = []; // deuda_pagos: historial de pagos
 let _planTab = 'cxp';  // sub-tab activo
 let _movFiltroObra = { egreso: '', ingreso: '' }; // '' = todos los proyectos
 let cuentaConcilActiva = null; // cuenta_id currently selected in conciliacion
@@ -5564,75 +5576,238 @@ function renderCXCList() {
 }
 
 // ── DEUDA ─────────────────────────────────────────────────────────────
+// ── DEUDA: helpers ────────────────────────────────────────────────────
+// Suma un mes sin el bug clasico de setMonth (31 ene + 1 mes = 3 mar).
+// Si el dia no existe en el mes destino, se ajusta al ultimo dia real.
+function sumarMesISO(fechaISO, meses) {
+  if(!fechaISO) return null;
+  var p = fechaISO.split('-');
+  var y = parseInt(p[0],10), m = parseInt(p[1],10)-1, dia = parseInt(p[2],10);
+  var destino = new Date(y, m + (meses||1), 1);
+  var ultimoDia = new Date(destino.getFullYear(), destino.getMonth()+1, 0).getDate();
+  destino.setDate(Math.min(dia, ultimoDia));
+  var mm = String(destino.getMonth()+1).padStart(2,'0');
+  var dd = String(destino.getDate()).padStart(2,'0');
+  return destino.getFullYear()+'-'+mm+'-'+dd;
+}
+
+// Interes mensual estimado = saldo * tasa anual / 12. Es estimacion simple,
+// no sustituye el estado de cuenta del acreedor.
+function interesMensualEstimado(x) {
+  var saldo = parseFloat(x.saldo_actual)||0;
+  var tasa  = parseFloat(x.tasa_interes)||0;
+  if(saldo<=0 || tasa<=0) return 0;
+  return saldo * (tasa/100) / 12;
+}
+
+// Compromiso mensual: pago fijo si es amortizable, pago minimo si es revolvente.
+function compromisoMensual(x) {
+  return parseFloat(x.categoria==='revolvente' ? x.pago_minimo : x.pago_mensual) || 0;
+}
+
+function pagosDeDeuda(deudaId) {
+  return (pagosDeudaData||[])
+    .filter(function(p){ return p.deuda_id===deudaId; })
+    .sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+}
+
+function toggleCamposDeuda() {
+  var esRev = document.getElementById('deu-categoria').value === 'revolvente';
+  var set = function(id, visible){ var e=document.getElementById(id); if(e) e.style.display = visible?'':'none'; };
+  set('grp-deu-linea',        esRev);
+  set('grp-deu-pago-minimo',  esRev);
+  set('grp-deu-original',     !esRev);
+  set('grp-deu-pago-mensual', !esRev);
+}
+
+// ── DEUDA: lista ──────────────────────────────────────────────────────
 function renderDeudaList() {
   if(!deudaData.length) return '<div class="empty"><div class="empty-icon">🏦</div><div class="empty-title">Sin deuda registrada</div><div class="empty-sub">Toca + para registrar un crédito o préstamo</div></div>';
 
-  var totalDeuda   = deudaData.reduce(function(s,x){return s+(x.saldo_actual||0);},0);
-  var pagoMensual  = deudaData.reduce(function(s,x){return s+(x.pago_mensual||0);},0);
+  var activos      = deudaData.filter(function(x){ return x.activo!==false; });
+  var totalDeuda   = activos.reduce(function(s,x){ return s+(parseFloat(x.saldo_actual)||0); },0);
+  var compromiso   = activos.reduce(function(s,x){ return s+compromisoMensual(x); },0);
+  var interesMes   = activos.reduce(function(s,x){ return s+interesMensualEstimado(x); },0);
+  var sinCompromiso= activos.filter(function(x){ return compromisoMensual(x)<=0; }).length;
 
-  var html = '<div class="hero-card" style="margin-bottom:12px"><div class="hero-label" style="color:var(--purple)">Deuda total</div><div class="hero-amount" style="color:var(--purple)">'+fmt(totalDeuda)+'</div><div class="hero-sub"><span class="chip">💳 Pago mensual: '+fmt(pagoMensual)+'</span></div></div>';
-  html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
-
-  deudaData.forEach(function(x,i){
-    var pct     = x.monto_original>0?Math.round((1-(x.saldo_actual/x.monto_original))*100):0;
-    var isAdmin = currentUser.rol==='director'||currentUser.rol==='admin';
-    var expId   = 'deu-exp-'+x.id;
-    var dias    = diasParaVencer(x.fecha_proximo_pago);
-    var diasStr = '';
-    if(dias!==null){
-      if(dias<=0)  diasStr = '<span style="color:var(--danger);font-size:10px;font-weight:700">⚠️ Pago vencido</span>';
-      else if(dias<=7) diasStr = '<span style="color:var(--warn);font-size:10px">'+dias+'d para pago</span>';
-      else diasStr = '<span style="color:var(--dim);font-size:10px">'+dias+'d para pago</span>';
-    }
-
-    html += '<div style="border-bottom:'+(i<deudaData.length-1?'1px solid var(--border)':'none')+'">';
-    html += '<div onclick="toggleCXP(\''+expId+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">';
-    html += '<div style="flex:1;min-width:0">';
-    html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700">'+(x.acreedor||'—')+'</span>';
-    if(x.negocio) html += '<span style="font-size:10px;color:var(--dim)">'+x.negocio+'</span>';
-    if(x.tipo)    html += '<span style="font-size:10px;background:rgba(155,126,255,.12);color:var(--purple);padding:1px 6px;border-radius:20px">'+x.tipo.replace(/_/g,' ')+'</span>';
-    html += '</div>';
-    html += '<div style="margin-top:4px;background:var(--bg);border-radius:4px;height:4px;max-width:180px"><div style="background:var(--purple);height:4px;border-radius:4px;width:'+pct+'%"></div></div>';
-    html += '<div style="font-size:10px;color:var(--dim);margin-top:2px">'+pct+'% amortizado'+(diasStr?' · '+diasStr:'')+'</div>';
-    html += '</div>';
-    html += '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">';
-    html += '<div style="text-align:right"><div style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:var(--purple)">'+fmt(x.saldo_actual||0)+'</div>';
-    if(x.pago_mensual) html += '<div style="font-size:10px;color:var(--dim)">'+fmt(x.pago_mensual)+'/mes</div>';
-    html += '</div><span id="'+expId+'-arrow" style="color:var(--dim);font-size:12px">▼</span></div>';
-    html += '</div>';
-    html += '<div id="'+expId+'" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border);background:var(--bg)">';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:10px 0">';
-    if(x.monto_original)      html += '<div><div class="stat-label">Monto original</div><div style="font-size:12px">'+fmt(x.monto_original)+'</div></div>';
-    if(x.tasa_interes)        html += '<div><div class="stat-label">Tasa anual</div><div style="font-size:12px">'+x.tasa_interes+'%</div></div>';
-    if(x.fecha_proximo_pago)  html += '<div><div class="stat-label">Próximo pago</div><div style="font-size:12px">'+fmtDate(x.fecha_proximo_pago)+'</div></div>';
-    if(x.fecha_vencimiento)   html += '<div><div class="stat-label">Vencimiento total</div><div style="font-size:12px">'+fmtDate(x.fecha_vencimiento)+'</div></div>';
-    if(x.observaciones)       html += '<div style="grid-column:1/-1"><div class="stat-label">Notas</div><div style="font-size:12px;color:var(--text2)">'+x.observaciones+'</div></div>';
-    html += '</div>';
-    if(isAdmin){
-      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
-      html += '<button onclick="editDeuda(\''+x.id+'\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer">✏️ Editar</button>';
-      html += '<button onclick="deleteDeuda(\''+x.id+'\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑 Eliminar</button>';
-      html += '</div>';
-      html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
-      html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.04em">REGISTRAR PAGO</div>';
-      html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
-      html += '<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px">';
-      html += '<label style="font-size:10px;color:var(--dim)">Capital</label>';
-      html += '<input id="pago-cap-'+x.id+'" type="number" placeholder="0.00" step="0.01" min="0" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-family:inherit;width:100%;box-sizing:border-box">';
-      html += '</div>';
-      html += '<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px">';
-      html += '<label style="font-size:10px;color:var(--dim)">Intereses</label>';
-      html += '<input id="pago-int-'+x.id+'" type="number" placeholder="0.00" step="0.01" min="0" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-family:inherit;width:100%;box-sizing:border-box">';
-      html += '</div>';
-      html += '<button onclick="registrarPagoDeuda(\''+x.id+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end">💳 Registrar pago</button>';
-      html += '</div>';
-      html += '</div>';
-    }
-    html += '</div></div>';
-  });
+  var html = '<div class="hero-card" style="margin-bottom:12px">'
+    + '<div class="hero-label" style="color:var(--purple)">Deuda total</div>'
+    + '<div class="hero-amount" style="color:var(--purple)">'+fmt(totalDeuda)+'</div>'
+    + '<div class="hero-sub">'
+    + '<span class="chip">💳 Compromiso mensual: '+fmt(compromiso)+'</span> '
+    + '<span class="chip" title="Saldo x tasa anual / 12. Estimacion simple.">📈 Interés/mes aprox: '+fmt(interesMes)+'</span>'
+    + '</div>';
+  if(sinCompromiso>0){
+    html += '<div style="font-size:10px;color:var(--warn);margin-top:6px">⚠️ '+sinCompromiso+' sin pago mensual o mínimo capturado — el compromiso real es mayor</div>';
+  }
   html += '</div>';
+
+  // Desglose por negocio
+  var porNegocio = {};
+  activos.forEach(function(x){
+    var k = x.negocio || 'SIN NEGOCIO';
+    if(!porNegocio[k]) porNegocio[k] = { saldo:0, interes:0, n:0 };
+    porNegocio[k].saldo   += parseFloat(x.saldo_actual)||0;
+    porNegocio[k].interes += interesMensualEstimado(x);
+    porNegocio[k].n++;
+  });
+  var negocios = Object.keys(porNegocio).sort();
+  if(negocios.length>1){
+    html += '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
+    negocios.forEach(function(k){
+      var d = porNegocio[k];
+      html += '<div class="stat-box" style="flex:1;min-width:130px">'
+        + '<div class="stat-label">'+k+'</div>'
+        + '<div class="stat-val" style="font-size:15px;color:var(--purple)">'+fmt(d.saldo)+'</div>'
+        + '<div class="stat-sub">'+d.n+' · int. '+fmt(d.interes)+'/mes</div></div>';
+    });
+    html += '</div>';
+  }
+
+  var grupos = [
+    ['amortizable', '🏦 Créditos amortizables', 'El saldo solo baja'],
+    ['revolvente',  '💳 Tarjetas y revolventes', 'El saldo sube y baja']
+  ];
+
+  grupos.forEach(function(g){
+    var cat = g[0];
+    var items = activos.filter(function(x){ return (x.categoria||'amortizable')===cat; });
+    if(!items.length) return;
+    items.sort(function(a,b){ return interesMensualEstimado(b)-interesMensualEstimado(a); });
+
+    var saldoGrupo = items.reduce(function(s,x){ return s+(parseFloat(x.saldo_actual)||0); },0);
+    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 6px">'
+      + '<div><span style="font-size:12px;font-weight:700">'+g[1]+'</span> '
+      + '<span style="font-size:10px;color:var(--dim)">· '+items.length+' · '+g[2]+'</span></div>'
+      + '<span style="font-size:12px;font-weight:700;color:var(--purple)">'+fmt(saldoGrupo)+'</span></div>';
+    html += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
+
+    items.forEach(function(x,i){
+      var isAdmin = currentUser.rol==='director'||currentUser.rol==='admin';
+      var expId   = 'deu-exp-'+x.id;
+      var saldo   = parseFloat(x.saldo_actual)||0;
+      var dias    = diasParaVencer(x.fecha_proximo_pago);
+      var intMes  = interesMensualEstimado(x);
+      var diasStr = '';
+      if(dias!==null){
+        if(dias<=0)      diasStr = '<span style="color:var(--danger);font-size:10px;font-weight:700">⚠️ Pago vencido</span>';
+        else if(dias<=7) diasStr = '<span style="color:var(--warn);font-size:10px">'+dias+'d para pago</span>';
+        else             diasStr = '<span style="color:var(--dim);font-size:10px">'+dias+'d para pago</span>';
+      }
+
+      // Indicador segun categoria
+      var barra='', etiqueta='';
+      if(cat==='revolvente'){
+        var linea = parseFloat(x.linea_credito)||0;
+        if(linea>0){
+          var uso = Math.min(100, Math.round(saldo/linea*100));
+          var col = uso>=90?'var(--danger)':(uso>=70?'var(--warn)':'var(--purple)');
+          barra    = '<div style="margin-top:4px;background:var(--bg);border-radius:4px;height:4px;max-width:180px"><div style="background:'+col+';height:4px;border-radius:4px;width:'+uso+'%"></div></div>';
+          etiqueta = uso+'% de la línea usada · disponible '+fmt(Math.max(0,linea-saldo));
+        } else {
+          etiqueta = '<span style="color:var(--warn)">Sin línea de crédito capturada</span>';
+        }
+      } else {
+        var orig = parseFloat(x.monto_original)||0;
+        var pct  = orig>0 ? Math.max(0, Math.min(100, Math.round((1-(saldo/orig))*100))) : 0;
+        barra    = '<div style="margin-top:4px;background:var(--bg);border-radius:4px;height:4px;max-width:180px"><div style="background:var(--purple);height:4px;border-radius:4px;width:'+pct+'%"></div></div>';
+        etiqueta = pct+'% amortizado';
+      }
+
+      html += '<div style="border-bottom:'+(i<items.length-1?'1px solid var(--border)':'none')+'">';
+      html += '<div onclick="toggleCXP(\'' + expId + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700">'+escDeu(x.acreedor||'—')+'</span>';
+      if(x.negocio) html += '<span style="font-size:10px;color:var(--dim)">'+escDeu(x.negocio)+'</span>';
+      if(x.tipo)    html += '<span style="font-size:10px;background:rgba(155,126,255,.12);color:var(--purple);padding:1px 6px;border-radius:20px">'+escDeu(String(x.tipo).replace(/_/g,' '))+'</span>';
+      if(x.tasa_interes) html += '<span style="font-size:10px;color:'+(x.tasa_interes>=60?'var(--danger)':'var(--dim)')+'">'+x.tasa_interes+'%</span>';
+      html += '</div>';
+      html += barra;
+      html += '<div style="font-size:10px;color:var(--dim);margin-top:2px">'+etiqueta+(diasStr?' · '+diasStr:'')+'</div>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">';
+      html += '<div style="text-align:right"><div style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800;color:var(--purple)">'+fmt(saldo)+'</div>';
+      if(intMes>0) html += '<div style="font-size:10px;color:var(--dim)">int. '+fmt(intMes)+'/mes</div>';
+      html += '</div><span id="'+expId+'-arrow" style="color:var(--dim);font-size:12px">▼</span></div>';
+      html += '</div>';
+
+      // ── Detalle expandido ──
+      html += '<div id="'+expId+'" style="display:none;padding:0 14px 12px;border-top:1px solid var(--border);background:var(--bg)">';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:10px 0">';
+      if(cat==='revolvente'){
+        if(x.linea_credito) html += '<div><div class="stat-label">Línea de crédito</div><div style="font-size:12px">'+fmt(x.linea_credito)+'</div></div>';
+        if(x.pago_minimo)   html += '<div><div class="stat-label">Pago mínimo</div><div style="font-size:12px">'+fmt(x.pago_minimo)+'</div></div>';
+      } else {
+        if(x.monto_original) html += '<div><div class="stat-label">Monto original</div><div style="font-size:12px">'+fmt(x.monto_original)+'</div></div>';
+        if(x.pago_mensual)   html += '<div><div class="stat-label">Pago mensual</div><div style="font-size:12px">'+fmt(x.pago_mensual)+'</div></div>';
+      }
+      if(x.tasa_interes)       html += '<div><div class="stat-label">Tasa anual</div><div style="font-size:12px">'+x.tasa_interes+'%</div></div>';
+      if(intMes>0)             html += '<div><div class="stat-label">Interés estimado</div><div style="font-size:12px">'+fmt(intMes)+'/mes</div></div>';
+      if(x.fecha_proximo_pago) html += '<div><div class="stat-label">Próximo pago</div><div style="font-size:12px">'+fmtDate(x.fecha_proximo_pago)+'</div></div>';
+      if(x.fecha_vencimiento)  html += '<div><div class="stat-label">Vencimiento total</div><div style="font-size:12px">'+fmtDate(x.fecha_vencimiento)+'</div></div>';
+      if(x.observaciones)      html += '<div style="grid-column:1/-1"><div class="stat-label">Notas</div><div style="font-size:12px;color:var(--text2)">'+escDeu(x.observaciones)+'</div></div>';
+      html += '</div>';
+
+      // ── Historial de pagos ──
+      var pagos = pagosDeDeuda(x.id);
+      html += '<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:10px">';
+      html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.04em">HISTORIAL DE PAGOS ('+pagos.length+')</div>';
+      if(!pagos.length){
+        html += '<div style="font-size:11px;color:var(--dim)">Sin pagos registrados.</div>';
+      } else {
+        var tCap = pagos.reduce(function(s,p){return s+(parseFloat(p.capital)||0);},0);
+        var tInt = pagos.reduce(function(s,p){return s+(parseFloat(p.intereses)||0);},0);
+        var tCom = pagos.reduce(function(s,p){return s+(parseFloat(p.comisiones)||0);},0);
+        html += '<div style="font-size:10px;color:var(--dim);margin-bottom:6px">Acumulado — capital '+fmt(tCap)+' · intereses '+fmt(tInt)+(tCom>0?' · comisiones '+fmt(tCom):'')+'</div>';
+        html += '<div style="max-height:220px;overflow:auto">';
+        pagos.slice(0,40).forEach(function(p){
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border);font-size:11px">';
+          html += '<span style="color:var(--dim);min-width:74px">'+fmtDate(p.fecha)+'</span>';
+          html += '<span style="flex:1">cap. '+fmt(p.capital||0)+' · int. '+fmt(p.intereses||0)+(parseFloat(p.comisiones)>0?' · com. '+fmt(p.comisiones):'')+'</span>';
+          html += '<span style="font-weight:700">'+fmt(p.total||0)+'</span>';
+          if(isAdmin) html += '<button onclick="eliminarPagoDeuda(\'' + p.id + '\')" title="Revertir este pago" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px">🗑</button>';
+          html += '</div>';
+        });
+        if(pagos.length>40) html += '<div style="font-size:10px;color:var(--dim);padding-top:4px">Mostrando 40 de '+pagos.length+'</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+
+      if(isAdmin){
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">';
+        html += '<button onclick="editDeuda(\'' + x.id + '\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer">✏️ Editar</button>';
+        html += '<button onclick="deleteDeuda(\'' + x.id + '\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑 Eliminar</button>';
+        html += '</div>';
+        html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
+        html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.04em">REGISTRAR PAGO</div>';
+        html += '<div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">';
+        var campo = function(id,lab,tipo,val){
+          return '<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:104px">'
+            + '<label style="font-size:10px;color:var(--dim)">'+lab+'</label>'
+            + '<input id="'+id+'" type="'+tipo+'" '+(tipo==='number'?'placeholder="0.00" step="0.01" min="0"':'')+(val?' value="'+val+'"':'')
+            + ' style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:12px;font-family:inherit;width:100%;box-sizing:border-box"></div>';
+        };
+        html += campo('pago-fecha-'+x.id,'Fecha','date', new Date().toISOString().substring(0,10));
+        html += campo('pago-cap-'+x.id,'Capital','number');
+        html += campo('pago-int-'+x.id,'Intereses','number');
+        html += campo('pago-com-'+x.id,'Comisiones','number');
+        html += '<button onclick="registrarPagoDeuda(\'' + x.id + '\')" style="padding:8px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">💳 Registrar</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+    });
+    html += '</div>';
+  });
+
   return html;
 }
+
+function escDeu(t){
+  if(t===null||t===undefined) return '';
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 
 // ── CXP / CXC / DEUDA CRUD ───────────────────────────────────────────
 function openNewPlan() {
@@ -5892,45 +6067,64 @@ function openNewDeuda() {
   _editDeudaId = null;
   document.querySelector('#sheet-deuda .sheet-title').textContent='Nueva Deuda Financiera';
   ['deu-acreedor','deu-obs'].forEach(function(id){document.getElementById(id).value='';});
-  ['deu-original','deu-saldo','deu-tasa','deu-pago-mensual'].forEach(function(id){document.getElementById(id).value='';});
+  ['deu-original','deu-saldo','deu-tasa','deu-pago-mensual','deu-linea','deu-pago-minimo'].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.value='';
+  });
   document.getElementById('deu-prox-pago').value='';
   document.getElementById('deu-vencimiento').value='';
   document.getElementById('deu-negocio').value='RAL';
+  document.getElementById('deu-categoria').value='amortizable';
+  toggleCamposDeuda();
   document.getElementById('deu-save-btn').textContent='Guardar';
   document.getElementById('deu-save-btn').disabled=false;
   openSheet('deuda');
 }
+
 function editDeuda(id) {
   var x=deudaData.find(function(d){return d.id===id;});if(!x)return;
   _editDeudaId=id;
   document.querySelector('#sheet-deuda .sheet-title').textContent='Editar Deuda';
   document.getElementById('deu-acreedor').value=x.acreedor||'';
   document.getElementById('deu-tipo').value=x.tipo||'credito_bancario';
+  document.getElementById('deu-categoria').value=x.categoria||'amortizable';
   document.getElementById('deu-original').value=x.monto_original||'';
   document.getElementById('deu-saldo').value=x.saldo_actual||'';
   document.getElementById('deu-tasa').value=x.tasa_interes||'';
   document.getElementById('deu-pago-mensual').value=x.pago_mensual||'';
+  var eL=document.getElementById('deu-linea');       if(eL) eL.value=x.linea_credito||'';
+  var eM=document.getElementById('deu-pago-minimo'); if(eM) eM.value=x.pago_minimo||'';
   document.getElementById('deu-prox-pago').value=x.fecha_proximo_pago||'';
   document.getElementById('deu-vencimiento').value=x.fecha_vencimiento||'';
   document.getElementById('deu-negocio').value=x.negocio||'RAL';
   document.getElementById('deu-obs').value=x.observaciones||'';
+  toggleCamposDeuda();
   document.getElementById('deu-save-btn').textContent='Guardar cambios';
   document.getElementById('deu-save-btn').disabled=false;
   openSheet('deuda');
 }
 
 async function saveDeuda() {
-  var acreedor = document.getElementById('deu-acreedor').value.trim();
-  var saldo    = parseFloat(document.getElementById('deu-saldo').value)||0;
+  var acreedor  = document.getElementById('deu-acreedor').value.trim();
+  var saldo     = parseFloat(document.getElementById('deu-saldo').value)||0;
+  var categoria = document.getElementById('deu-categoria').value || 'amortizable';
   if(!acreedor||!saldo){showToast('Acreedor y saldo son obligatorios',true);return;}
+
+  var linea = parseFloat(document.getElementById('deu-linea') ? document.getElementById('deu-linea').value : '')||null;
+  if(categoria==='revolvente' && linea && saldo > linea){
+    if(!confirm('El saldo ('+fmt(saldo)+') supera la línea de crédito ('+fmt(linea)+').\n¿Guardar de todas formas?')) return;
+  }
+
   var btn = document.getElementById('deu-save-btn');
   btn.textContent='Guardando...'; btn.disabled=true;
   var payload = {
     acreedor:acreedor, tipo:document.getElementById('deu-tipo').value,
+    categoria:categoria,
     monto_original:parseFloat(document.getElementById('deu-original').value)||saldo,
     saldo_actual:saldo,
     tasa_interes:parseFloat(document.getElementById('deu-tasa').value)||null,
     pago_mensual:parseFloat(document.getElementById('deu-pago-mensual').value)||null,
+    linea_credito:linea,
+    pago_minimo:parseFloat(document.getElementById('deu-pago-minimo') ? document.getElementById('deu-pago-minimo').value : '')||null,
     fecha_proximo_pago:document.getElementById('deu-prox-pago').value||null,
     fecha_vencimiento:document.getElementById('deu-vencimiento').value||null,
     negocio:document.getElementById('deu-negocio').value,
@@ -5950,37 +6144,85 @@ async function saveDeuda() {
   } catch(e){showToast('Error: '+e.message,true);}
   btn.textContent='Guardar'; btn.disabled=false;
 }
+
 async function registrarPagoDeuda(id) {
-  var capInp=document.getElementById('pago-cap-'+id);
-  var intInp=document.getElementById('pago-int-'+id);
-  var capital=parseFloat(capInp?capInp.value:0)||0;
-  var intereses=parseFloat(intInp?intInp.value:0)||0;
-  if(capital<=0&&intereses<=0){showToast('Ingresa al menos un monto',true);return;}
-  if(capital<0||intereses<0){showToast('Los montos no pueden ser negativos',true);return;}
+  var g = function(pre){ var e=document.getElementById(pre+id); return e?e.value:''; };
+  var capital    = parseFloat(g('pago-cap-'))||0;
+  var intereses  = parseFloat(g('pago-int-'))||0;
+  var comisiones = parseFloat(g('pago-com-'))||0;
+  var fecha      = g('pago-fecha-') || new Date().toISOString().substring(0,10);
+
+  if(capital<=0&&intereses<=0&&comisiones<=0){showToast('Ingresa al menos un monto',true);return;}
+  if(capital<0||intereses<0||comisiones<0){showToast('Los montos no pueden ser negativos',true);return;}
+
   var x=deudaData.find(function(d){return d.id===id;});if(!x)return;
-  var nuevoSaldo=Math.max(0,(x.saldo_actual||0)-capital);
-  var patch={saldo_actual:nuevoSaldo};
-  if(x.fecha_proximo_pago&&capital>0){
-    var d=new Date(x.fecha_proximo_pago+'T12:00:00');
-    d.setMonth(d.getMonth()+1);
-    patch.fecha_proximo_pago=d.toISOString().substring(0,10);
+  var saldoPrevio = parseFloat(x.saldo_actual)||0;
+
+  if(capital > saldoPrevio){
+    if(!confirm('El capital ('+fmt(capital)+') es mayor al saldo ('+fmt(saldoPrevio)+').\n'
+      +'El saldo quedará en 0 y se perderán '+fmt(capital-saldoPrevio)+' del abono.\n\n¿Continuar?')) return;
   }
+
+  var nuevoSaldo = Math.max(0, saldoPrevio - capital);
+
   try{
-    await db('PATCH','deuda_financiera?id=eq.'+id,patch);
+    // 1) Guardar el pago en el historial
+    await db('POST','deuda_pagos', {
+      deuda_id: id, fecha: fecha,
+      capital: capital, intereses: intereses, comisiones: comisiones,
+      saldo_despues: nuevoSaldo,
+      created_by: currentUser.nombre
+    });
+
+    // 2) Actualizar el credito
+    var patch = { saldo_actual: nuevoSaldo };
+    // La fecha avanza con cualquier pago, no solo si hubo capital:
+    // en una tarjeta se puede pagar solo intereses y el periodo igual corre.
+    if(x.fecha_proximo_pago){
+      var nueva = sumarMesISO(x.fecha_proximo_pago, 1);
+      if(nueva) patch.fecha_proximo_pago = nueva;
+    }
+    await db('PATCH','deuda_financiera?id=eq.'+id, patch);
+
     var msg='✅ Pago aplicado';
-    if(capital>0) msg+=' — Capital: '+fmt(capital);
-    if(intereses>0) msg+=' — Intereses: '+fmt(intereses);
+    if(capital>0)    msg+=' — Capital: '+fmt(capital);
+    if(intereses>0)  msg+=' — Intereses: '+fmt(intereses);
+    if(comisiones>0) msg+=' — Comisiones: '+fmt(comisiones);
     msg+=' — Nuevo saldo: '+fmt(nuevoSaldo);
     showToast(msg);
     await loadAll();renderPlaneacion();
   }catch(e){showToast('Error: '+e.message,true);}
 }
 
+// Revierte un pago: lo borra del historial y devuelve el capital al saldo.
+async function eliminarPagoDeuda(pagoId) {
+  var p = (pagosDeudaData||[]).find(function(q){ return q.id===pagoId; });
+  if(!p) return;
+  var x = deudaData.find(function(d){ return d.id===p.deuda_id; });
+  var cap = parseFloat(p.capital)||0;
+  var txt = '¿Revertir este pago del '+fmtDate(p.fecha)+'?\n\n'
+          + 'Capital: '+fmt(cap)+'  ·  Intereses: '+fmt(p.intereses||0)+'\n';
+  if(x && cap>0) txt += '\nEl saldo volverá a '+fmt((parseFloat(x.saldo_actual)||0)+cap)+'.';
+  if(!confirm(txt)) return;
+  try{
+    await db('DELETE','deuda_pagos?id=eq.'+pagoId);
+    if(x && cap>0){
+      await db('PATCH','deuda_financiera?id=eq.'+p.deuda_id, { saldo_actual: (parseFloat(x.saldo_actual)||0)+cap });
+    }
+    showToast('Pago revertido');
+    await loadAll(); renderPlaneacion();
+  }catch(e){ showToast('Error: '+e.message,true); }
+}
+
 async function deleteDeuda(id) {
-  if(!confirm('¿Eliminar este registro de deuda?')) return;
+  var pagos = pagosDeDeuda(id).length;
+  var msg = '¿Eliminar este registro de deuda?';
+  if(pagos>0) msg += '\n\nSe borrarán también sus '+pagos+' pago(s) del historial. Esto no se puede deshacer.';
+  if(!confirm(msg)) return;
   try{await db('DELETE','deuda_financiera?id=eq.'+id);showToast('Eliminado');await loadAll();renderPlaneacion();}
   catch(e){showToast('Error',true);}
 }
+
 
 
 
