@@ -5802,6 +5802,64 @@ function openPagosPendientes() {
   openSheet('pagos');
 }
 
+// Ultimo corte que YA debio ocurrir para una tarjeta, segun su dia de corte.
+// Si el dia de este mes aun no llega, el ultimo fue el mes pasado.
+function corteEsperado(x) {
+  if(!x.dia_corte) return null;
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  var y=hoy.getFullYear(), m=hoy.getMonth();
+  var arma=function(yy,mm){
+    var ult=new Date(yy,mm+1,0).getDate();
+    return new Date(yy,mm,Math.min(x.dia_corte,ult));
+  };
+  var f=arma(y,m);
+  if(f>hoy){ m--; if(m<0){ m=11; y--; } f=arma(y,m); }
+  var p2=function(n){ return String(n).padStart(2,'0'); };
+  return { fecha:f.getFullYear()+'-'+p2(f.getMonth()+1)+'-'+p2(f.getDate()),
+           periodo:f.getFullYear()+'-'+p2(f.getMonth()+1)+'-01' };
+}
+
+// Tarjetas que ya cortaron y siguen sin corte capturado de ese periodo.
+function cortesPorCapturar() {
+  var out=[];
+  (deudaData||[]).forEach(function(x){
+    if(x.categoria!=='revolvente' || x.activo===false) return;
+    var e=corteEsperado(x);
+    if(!e) return;
+    var ya=(cortesData||[]).some(function(c){ return c.deuda_id===x.id && c.periodo===e.periodo; });
+    if(!ya) out.push({ deuda:x, esperado:e });
+  });
+  out.sort(function(a,b){ return a.esperado.fecha.localeCompare(b.esperado.fecha); });
+  return out;
+}
+
+function renderBannerCortes(isAdmin) {
+  var p=cortesPorCapturar();
+  if(!p.length) return '';
+  var hoy=new Date().toISOString().substring(0,10);
+  var atrasadas=p.filter(function(z){
+    return Math.round((new Date(hoy)-new Date(z.esperado.fecha))/86400000) > 7;
+  }).length;
+  var col = atrasadas ? 'var(--danger)' : 'var(--warn)';
+  var lista=p.map(function(z){
+    var d=Math.round((new Date(hoy)-new Date(z.esperado.fecha))/86400000);
+    return escDeu(z.deuda.acreedor)+' <span style="opacity:.7">('+fmtDate(z.esperado.fecha)+(d>0?', hace '+d+'d':'')+')</span>';
+  }).join(' · ');
+
+  var h='<div style="border:1px solid '+col+';background:rgba(244,168,74,.10);border-radius:var(--r);padding:11px 13px;margin-bottom:12px">';
+  h+='<div style="display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap">';
+  h+='<div style="flex:1;min-width:190px">';
+  h+='<div style="font-size:12px;font-weight:700;color:'+col+'">📋 '+p.length+' tarjeta(s) ya cortaron y no has capturado su corte</div>';
+  h+='<div style="font-size:10px;color:var(--text2);margin-top:4px;line-height:1.5">'+lista+'</div>';
+  h+='</div>';
+  if(isAdmin){
+    h+='<button onclick="openCapturaCortes(\'' + p[0].esperado.periodo + '\')" '
+      +'style="padding:7px 13px;border-radius:8px;border:none;background:'+col+';color:#111;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Capturar</button>';
+  }
+  h+='</div></div>';
+  return h;
+}
+
 // ── TARJETAS: cortes mensuales ────────────────────────────────────────
 function cortesDeTarjeta(deudaId) {
   return (cortesData||[])
@@ -6212,6 +6270,9 @@ function renderDeudaList() {
     html += '<div style="font-size:10px;color:var(--warn);margin-top:6px">⚠️ '+sinCompromiso+' sin pago mensual o mínimo capturado — el compromiso real es mayor</div>';
   }
   html += '</div>';
+
+  // Aviso de cortes por capturar — solo dentro de la sección de Deuda
+  html += renderBannerCortes(puedeEditarDeuda());
 
   // Desglose por negocio
   var porNegocio = {};
