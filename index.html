@@ -1439,13 +1439,14 @@ async function loadFiscalizacion() {
 // IMPORTANTE: pagos en Planeación NO generan movimientos en Control Presupuestal
 async function loadPlaneacion() {
   const lim = PAGE_LIMITS;
-  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu] = await Promise.all([
+  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu, _amort] = await Promise.all([
     dbSafe('GET', 'cuentas_por_pagar?order=created_at.desc&limit='  + lim.cuentas_por_pagar,  null, 'cxp'),
     dbSafe('GET', 'cuentas_por_cobrar?order=created_at.desc&limit=' + lim.cuentas_por_cobrar, null, 'cxc'),
     dbSafe('GET', 'deuda_financiera?order=created_at.desc&limit='         + lim.deuda_financiera,   null, 'deuda'),
     dbSafe('GET', 'solicitudes_pago?order=created_at.desc&limit=50',                                null, 'solicitudes_pago'),
     dbSafe('GET', 'solicitud_pago_items?order=prioridad.asc',                                       null, 'solicitud_items'),
     dbSafe('GET', 'deuda_pagos?order=fecha.desc&limit=500',                                        null, 'deuda_pagos'),
+    dbSafe('GET', 'deuda_amortizacion?order=num_pago.asc&limit=2000',                             null, 'amortizacion'),
   ]);
   cxpData        = _cxp;
   cxcData        = _cxc;
@@ -1453,6 +1454,7 @@ async function loadPlaneacion() {
   solicitudesPago = _sols;
   solicitudItems  = _solItems;
   pagosDeudaData  = _pagosDeu || [];
+  amortData       = _amort || [];
   console.log('[Planeación] CxP:' + cxpData.length + ' CxC:' + cxcData.length + ' Deuda:' + deudaData.length + ' Solicitudes:' + solicitudesPago.length);
 }
 
@@ -3137,6 +3139,7 @@ let ejecucionDetalleData = []; // v_ejecucion_presupuestal
 let cxcData = [];       // cuentas por cobrar
 let deudaData = [];     // deuda financiera
 let pagosDeudaData = []; // deuda_pagos: historial de pagos
+let amortData = [];      // deuda_amortizacion: tablas de amortizacion
 let _planTab = 'cxp';  // sub-tab activo
 let _movFiltroObra = { egreso: '', ingreso: '' }; // '' = todos los proyectos
 let cuentaConcilActiva = null; // cuenta_id currently selected in conciliacion
@@ -5616,6 +5619,11 @@ function proximoPorDia(dia) {
 
 // Fecha efectiva: el dia fijo manda; si no hay, la fecha suelta.
 function fechaPagoEfectiva(x) {
+  // 1) La tabla de amortizacion manda: trae las fechas exactas del banco,
+  //    que se recorren cuando caen en fin de semana.
+  var e = (typeof estatusAmort==='function') ? estatusAmort(x.id) : null;
+  if(e && e.proximo) return e.proximo.fecha_vencimiento;
+  // 2) Si no hay tabla, el dia fijo del mes.
   return proximoPorDia(x.dia_pago) || x.fecha_proximo_pago || null;
 }
 
@@ -5647,6 +5655,153 @@ function toggleCamposDeuda() {
   set('grp-deu-dia-corte',    esRev);
   set('grp-deu-original',     !esRev);
   set('grp-deu-pago-mensual', !esRev);
+}
+
+// ── AMORTIZACIÓN ──────────────────────────────────────────────────────
+function amortDeDeuda(deudaId) {
+  return (amortData||[])
+    .filter(function(a){ return a.deuda_id===deudaId; })
+    .sort(function(a,b){ return (a.num_pago||0)-(b.num_pago||0); });
+}
+
+// El atraso se calcula, nunca se guarda: asi no se desactualiza.
+function estatusAmort(deudaId) {
+  var t = amortDeDeuda(deudaId);
+  if(!t.length) return null;
+  var hoy = new Date().toISOString().substring(0,10);
+  var pagados=0, atrasados=0, montoAtras=0, prox=null;
+  t.forEach(function(a){
+    if(a.estado==='pagado'){ pagados++; return; }
+    if(a.fecha_vencimiento < hoy){ atrasados++; montoAtras += parseFloat(a.total)||0; }
+    if(!prox) prox = a;
+  });
+  return { total:t.length, pagados:pagados, atrasados:atrasados,
+           montoAtrasado:montoAtras, proximo:prox,
+           saldoProgramado: prox ? parseFloat(prox.saldo_programado) : 0 };
+}
+
+function renderAmortizacion(x, isAdmin) {
+  var t = amortDeDeuda(x.id);
+  if(!t.length) return '';
+  var e   = estatusAmort(x.id);
+  var hoy = new Date().toISOString().substring(0,10);
+  var tblId = 'amort-'+x.id;
+
+  // Semaforo
+  var col, txt;
+  if(e.atrasados>0){ col='var(--danger)'; txt='⚠️ '+e.atrasados+' pago(s) atrasado(s) — '+fmt(e.montoAtrasado); }
+  else if(e.pagados===e.total){ col='var(--ok)'; txt='✅ Liquidado'; }
+  else { col='var(--ok)'; txt='✅ Al corriente'; }
+
+  var h = '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
+  h += '<div onclick="toggleCXP(\'' + tblId + '\')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:8px">';
+  h += '<div><span style="font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.04em">TABLA DE AMORTIZACIÓN</span>'
+     + '<div style="font-size:11px;color:'+col+';margin-top:3px">'+txt+'</div></div>';
+  h += '<div style="text-align:right"><div style="font-size:11px;color:var(--dim)">Pago '+Math.min(e.pagados+1,e.total)+' de '+e.total+'</div>'
+     + '<span id="'+tblId+'-arrow" style="color:var(--dim);font-size:12px">▼</span></div>';
+  h += '</div>';
+
+  // Real vs programado
+  if(e.proximo){
+    var real = parseFloat(x.saldo_actual)||0;
+    var prog = e.pagados>0 ? (parseFloat(t[e.pagados-1].saldo_programado)||0) : (parseFloat(x.monto_original)||0);
+    var dif  = real - prog;
+    if(Math.abs(dif) >= 1){
+      h += '<div style="font-size:10px;margin-top:6px;color:'+(dif>0?'var(--warn)':'var(--ok)')+'">'
+         + (dif>0?'▲':'▼')+' Saldo real '+fmt(real)+' vs programado '+fmt(prog)+' — diferencia '+fmt(Math.abs(dif))+'</div>';
+    }
+  }
+
+  h += '<div id="'+tblId+'" style="display:none;margin-top:8px;max-height:340px;overflow:auto">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:10px">';
+  h += '<tr style="color:var(--dim);text-align:right">'
+     + '<th style="text-align:left;padding:3px">#</th><th style="text-align:left">Vence</th>'
+     + '<th>Capital</th><th>Interés</th><th>Com.</th><th>Total</th><th>Saldo</th><th></th></tr>';
+  t.forEach(function(a){
+    var pagado   = a.estado==='pagado';
+    var atrasado = !pagado && a.fecha_vencimiento < hoy;
+    var bg = pagado ? 'rgba(16,185,129,.07)' : (atrasado ? 'rgba(239,68,68,.07)' : '');
+    h += '<tr style="text-align:right;border-bottom:1px solid var(--border);background:'+bg+'">';
+    h += '<td style="text-align:left;padding:4px 3px">'+a.num_pago+'</td>';
+    h += '<td style="text-align:left;white-space:nowrap">'+fmtDate(a.fecha_vencimiento)+(atrasado?' ⚠️':'')+'</td>';
+    h += '<td>'+fmt(a.capital)+'</td><td>'+fmt(a.interes)+'</td>';
+    h += '<td>'+(parseFloat(a.comision)>0?fmt(a.comision):'—')+'</td>';
+    h += '<td style="font-weight:700">'+fmt(a.total)+'</td>';
+    h += '<td style="color:var(--dim)">'+fmt(a.saldo_programado)+'</td>';
+    h += '<td style="text-align:center;white-space:nowrap">';
+    if(isAdmin){
+      if(pagado) h += '<button onclick="desmarcarPagoAmort(\'' + a.id + '\')" title="Deshacer" style="background:none;border:none;color:var(--ok);cursor:pointer">✓</button>';
+      else       h += '<button onclick="marcarPagoAmort(\''   + a.id + '\')" title="Marcar como pagado" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--dim);cursor:pointer;padding:1px 5px">pagar</button>';
+    } else {
+      h += pagado?'✓':'';
+    }
+    h += '</td></tr>';
+  });
+  h += '</table></div></div>';
+  return h;
+}
+
+// Marca un renglon como pagado: crea el pago real y baja el saldo.
+// El saldo se resta del REAL, no se copia del programado: si un mes pagas
+// distinto, la diferencia debe verse en vez de taparse.
+async function marcarPagoAmort(amortId) {
+  var a = (amortData||[]).find(function(r){ return r.id===amortId; });
+  if(!a) return;
+  var x = deudaData.find(function(d){ return d.id===a.deuda_id; });
+  if(!x) return;
+
+  var cap = parseFloat(a.capital)||0;
+  var saldoPrevio = parseFloat(x.saldo_actual)||0;
+  var nuevoSaldo  = Math.max(0, saldoPrevio - cap);
+
+  var txt = 'Marcar el pago '+a.num_pago+' como pagado\n\n'
+          + 'Vence: '+fmtDate(a.fecha_vencimiento)+'\n'
+          + 'Capital: '+fmt(cap)+'   Interés: '+fmt(a.interes||0)
+          + (parseFloat(a.comision)>0 ? '   Comisión: '+fmt(a.comision) : '')+'\n'
+          + 'Total: '+fmt(a.total)+'\n\n'
+          + 'Saldo: '+fmt(saldoPrevio)+' → '+fmt(nuevoSaldo)+'\n'
+          + 'Programado en el contrato: '+fmt(a.saldo_programado||0);
+  if(!confirm(txt)) return;
+
+  try{
+    var creado = await db('POST','deuda_pagos', {
+      deuda_id: a.deuda_id,
+      fecha: a.fecha_vencimiento,
+      capital: cap,
+      intereses: parseFloat(a.interes)||0,
+      comisiones: (parseFloat(a.comision)||0) + (parseFloat(a.iva)||0),
+      saldo_despues: nuevoSaldo,
+      observaciones: 'Pago '+a.num_pago+' de la tabla de amortización',
+      created_by: currentUser.nombre
+    });
+    var pagoId = (creado && creado[0] && creado[0].id) ? creado[0].id : null;
+
+    await db('PATCH','deuda_amortizacion?id=eq.'+amortId, {
+      estado:'pagado', fecha_pagada: a.fecha_vencimiento, pago_id: pagoId
+    });
+    await db('PATCH','deuda_financiera?id=eq.'+a.deuda_id, { saldo_actual: nuevoSaldo });
+
+    showToast('✅ Pago '+a.num_pago+' registrado — saldo '+fmt(nuevoSaldo));
+    await loadAll(); renderPlaneacion();
+  }catch(e){ showToast('Error: '+e.message,true); }
+}
+
+async function desmarcarPagoAmort(amortId) {
+  var a = (amortData||[]).find(function(r){ return r.id===amortId; });
+  if(!a) return;
+  var x = deudaData.find(function(d){ return d.id===a.deuda_id; });
+  var cap = parseFloat(a.capital)||0;
+  var txt = '¿Deshacer el pago '+a.num_pago+'?\n\n'
+          + 'Se borrará del historial y el saldo volverá a '
+          + fmt((parseFloat(x?x.saldo_actual:0)||0)+cap)+'.';
+  if(!confirm(txt)) return;
+  try{
+    if(a.pago_id) await db('DELETE','deuda_pagos?id=eq.'+a.pago_id);
+    await db('PATCH','deuda_amortizacion?id=eq.'+amortId, { estado:'pendiente', fecha_pagada:null, pago_id:null });
+    if(x) await db('PATCH','deuda_financiera?id=eq.'+a.deuda_id, { saldo_actual: (parseFloat(x.saldo_actual)||0)+cap });
+    showToast('Pago '+a.num_pago+' deshecho');
+    await loadAll(); renderPlaneacion();
+  }catch(e){ showToast('Error: '+e.message,true); }
 }
 
 // ── DEUDA: lista ──────────────────────────────────────────────────────
@@ -5753,6 +5908,12 @@ function renderDeudaList() {
       if(x.tasa_interes) html += '<span style="font-size:10px;color:'+(x.tasa_interes>=60?'var(--danger)':'var(--dim)')+'">'+x.tasa_interes+'%</span>';
       html += '</div>';
       html += barra;
+      var eAm = estatusAmort(x.id);
+      if(eAm && eAm.atrasados>0){
+        etiqueta = '<span style="color:var(--danger);font-weight:700">⚠️ '+eAm.atrasados+' pago(s) atrasado(s) · '+fmt(eAm.montoAtrasado)+'</span>';
+      } else if(eAm){
+        etiqueta += ' · pago '+Math.min(eAm.pagados+1,eAm.total)+'/'+eAm.total;
+      }
       html += '<div style="font-size:10px;color:var(--dim);margin-top:2px">'+etiqueta+(diasStr?' · '+diasStr:'')+'</div>';
       html += '</div>';
       html += '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">';
@@ -5779,6 +5940,9 @@ function renderDeudaList() {
       if(x.fecha_vencimiento)  html += '<div><div class="stat-label">Vencimiento total</div><div style="font-size:12px">'+fmtDate(x.fecha_vencimiento)+'</div></div>';
       if(x.observaciones)      html += '<div style="grid-column:1/-1"><div class="stat-label">Notas</div><div style="font-size:12px;color:var(--text2)">'+escDeu(x.observaciones)+'</div></div>';
       html += '</div>';
+
+      // ── Tabla de amortizacion (si tiene) ──
+      html += renderAmortizacion(x, isAdmin);
 
       // ── Historial de pagos ──
       var pagos = pagosDeDeuda(x.id);
