@@ -5933,14 +5933,27 @@ async function pagarCorte(corteId, tipo) {
   var c=(cortesData||[]).find(function(x){ return x.id===corteId; });
   if(!c) return;
   var t=deudaData.find(function(d){ return d.id===c.deuda_id; });
-  var monto = tipo==='minimo' ? parseFloat(c.pago_minimo)||0
-            : tipo==='total'  ? parseFloat(c.pago_no_intereses)||0 : 0;
+  var yaPagado = parseFloat(c.pagado)||0;
+  var minimo   = parseFloat(c.pago_minimo)||0;
+  var total    = parseFloat(c.pago_no_intereses)||0;
+  var falta    = total>0 ? Math.max(0, total-yaPagado) : 0;
+
+  // El minimo solo se puede registrar una vez por corte.
+  if(tipo==='minimo' && minimo>0 && yaPagado>=minimo){
+    showToast('El pago mínimo de este corte ya está registrado', true);
+    return;
+  }
+  var monto = tipo==='minimo' ? Math.max(0, minimo-yaPagado)
+            : tipo==='total'  ? (falta>0 ? falta : total) : 0;
   if(tipo==='otro'){
     var r=prompt('¿Cuánto pagaste de '+(t?t.acreedor:'la tarjeta')+'?');
     if(r===null) return;
     monto=parseFloat(r)||0;
   }
   if(monto<=0){ showToast('Monto inválido',true); return; }
+  if(total>0 && monto>falta+0.01){
+    if(!confirm('Vas a registrar '+fmt(monto)+' pero solo faltan '+fmt(falta)+' de este corte.\n\n¿Continuar?')) return;
+  }
 
   var saldoPrevio=parseFloat(t?t.saldo_actual:0)||0;
   var nuevoSaldo=Math.max(0, saldoPrevio-monto);
@@ -5957,6 +5970,7 @@ async function pagarCorte(corteId, tipo) {
     await db('POST','deuda_pagos',{
       deuda_id:c.deuda_id, fecha:new Date().toISOString().substring(0,10),
       capital:monto, intereses:0, comisiones:0, saldo_despues:nuevoSaldo,
+      corte_id:corteId,
       observaciones:'Pago del corte '+nombrePeriodo(c.periodo),
       created_by:currentUser.nombre
     });
@@ -5994,11 +6008,23 @@ function renderCorteTarjeta(x, isAdmin) {
     if(parseFloat(c.pagado)>0) h+='<div><div class="stat-label">Pagado</div><div style="font-size:12px;color:var(--ok)">'+fmt(c.pagado)+'</div></div>';
     h+='</div>';
     if(isAdmin && c.estado!=='pagado'){
-      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">';
-      if(c.pago_minimo)       h+='<button onclick="pagarCorte(\''+c.id+'\',\'minimo\')" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:11px;cursor:pointer">Pagué el mínimo ('+fmt(c.pago_minimo)+')</button>';
-      if(c.pago_no_intereses) h+='<button onclick="pagarCorte(\''+c.id+'\',\'total\')" style="padding:6px 11px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Pagué todo ('+fmt(falta)+')</button>';
+      var _ya  = parseFloat(c.pagado)||0;
+      var _min = parseFloat(c.pago_minimo)||0;
+      var _minCubierto = _min>0 && _ya>=_min;
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">';
+      if(_min>0){
+        if(_minCubierto){
+          h+='<button disabled title="Ya registraste el pago mínimo de este corte" style="padding:6px 11px;border-radius:8px;border:1px dashed var(--border);background:none;color:var(--dim);font-size:11px;cursor:not-allowed;opacity:.6">✓ Mínimo cubierto</button>';
+        } else {
+          h+='<button onclick="pagarCorte(\''+c.id+'\',\'minimo\')" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:11px;cursor:pointer">Pagué el mínimo ('+fmt(_min-_ya)+')</button>';
+        }
+      }
+      if(c.pago_no_intereses && falta>0) h+='<button onclick="pagarCorte(\''+c.id+'\',\'total\')" style="padding:6px 11px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Pagar el resto ('+fmt(falta)+')</button>';
       h+='<button onclick="pagarCorte(\''+c.id+'\',\'otro\')" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:11px;cursor:pointer">Otro monto</button>';
       h+='</div>';
+      if(_ya>0) h+='<div style="font-size:10px;color:var(--dim);margin-top:6px">Ya registraste '+fmt(_ya)
+                 + (c.pago_no_intereses?' de '+fmt(c.pago_no_intereses):'')
+                 + '. Para corregir un pago, bórralo desde el historial.</div>';
     }
     if(lista.length>1){
       h+='<div style="font-size:10px;color:var(--dim);margin-top:8px">Historial: ';
@@ -6824,6 +6850,19 @@ async function eliminarPagoDeuda(pagoId) {
   if(!confirm(txt)) return;
   try{
     await db('DELETE','deuda_pagos?id=eq.'+pagoId);
+    // Si el pago venia de un corte de tarjeta, revertir tambien el corte.
+    if(p.corte_id){
+      var c = (cortesData||[]).find(function(z){ return z.id===p.corte_id; });
+      if(c){
+        var restante = Math.max(0,(parseFloat(c.pagado)||0)-cap);
+        await db('PATCH','tarjeta_cortes?id=eq.'+p.corte_id, {
+          pagado: restante,
+          estado: restante<=0 ? 'pendiente'
+                : (c.pago_no_intereses && restante>=parseFloat(c.pago_no_intereses) ? 'pagado' : 'parcial'),
+          fecha_pago: restante<=0 ? null : c.fecha_pago
+        });
+      }
+    }
     if(x && cap>0){
       await db('PATCH','deuda_financiera?id=eq.'+p.deuda_id, { saldo_actual: (parseFloat(x.saldo_actual)||0)+cap });
     }
