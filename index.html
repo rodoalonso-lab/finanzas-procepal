@@ -909,6 +909,20 @@ body.tema-claro .sub-nav{background:#FFFFFF}
 </div>
 
 <!-- SHEET: Nueva Deuda Financiera -->
+<div class="sheet-overlay" id="sheet-pagos">
+  <div class="sheet" style="max-width:760px">
+    <div class="sheet-handle"></div>
+    <div style="padding:18px 0 4px">
+      <div class="sheet-top">
+        <div class="sheet-title">Pagos pendientes</div>
+        <button class="sheet-close" onclick="closeSheet('pagos')">✕</button>
+      </div>
+    </div>
+    <div id="pagos-body"></div>
+    <button class="btn btn-ghost" onclick="closeSheet('pagos')">Cerrar</button>
+  </div>
+</div>
+
 <div class="sheet-overlay" id="sheet-cortes">
   <div class="sheet" style="max-width:860px">
     <div class="sheet-handle"></div>
@@ -5686,6 +5700,108 @@ function puedeEditarDeuda() {
   return !!m.plan_deuda;
 }
 
+// ── PANTALLA ÚNICA DE PAGOS ───────────────────────────────────────────
+// Junta todo lo que hay que pagar: mensualidades de créditos con tabla y
+// cortes de tarjetas. Evita abrir crédito por crédito.
+function pagosPendientes(diasVista) {
+  var hoy = new Date().toISOString().substring(0,10);
+  var lim = new Date(); lim.setDate(lim.getDate() + (diasVista||30));
+  var limS = lim.toISOString().substring(0,10);
+  var out = [];
+
+  // Mensualidades de tablas de amortización
+  (amortData||[]).forEach(function(a){
+    if(a.estado==='pagado') return;
+    if(a.fecha_vencimiento > limS) return;
+    var d = deudaData.find(function(z){ return z.id===a.deuda_id; });
+    if(!d || d.activo===false) return;
+    out.push({
+      tipo:'amort', id:a.id, deudaId:d.id,
+      nombre:d.acreedor+' ('+d.negocio+')',
+      detalle:'Mensualidad '+a.num_pago+'/'+(amortDeDeuda(d.id).length),
+      fecha:a.fecha_vencimiento, monto:parseFloat(a.total)||0,
+      vencido:a.fecha_vencimiento < hoy
+    });
+  });
+
+  // Cortes de tarjeta no cubiertos
+  (cortesData||[]).forEach(function(c){
+    if(c.estado==='pagado') return;
+    var f = c.fecha_limite || c.periodo;
+    if(f > limS) return;
+    var d = deudaData.find(function(z){ return z.id===c.deuda_id; });
+    if(!d || d.activo===false) return;
+    var falta = Math.max(0,(parseFloat(c.pago_no_intereses)||0)-(parseFloat(c.pagado)||0));
+    out.push({
+      tipo:'corte', id:c.id, deudaId:d.id,
+      nombre:d.acreedor+(d.observaciones?' ('+d.observaciones.substring(0,12)+')':''),
+      detalle:'Corte '+nombrePeriodo(c.periodo)+(c.estado==='parcial'?' · parcial':''),
+      fecha:f, monto:falta || parseFloat(c.saldo_corte)||0,
+      minimo:parseFloat(c.pago_minimo)||0,
+      vencido:f < hoy
+    });
+  });
+
+  out.sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  return out;
+}
+
+function openPagosPendientes() {
+  var lista = pagosPendientes(30);
+  var venc  = lista.filter(function(p){ return p.vencido; });
+  var prox  = lista.filter(function(p){ return !p.vencido; });
+
+  var h='';
+  if(!lista.length){
+    h = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Nada por pagar</div>'
+      + '<div class="empty-sub">No hay mensualidades ni cortes pendientes en los próximos 30 días.</div></div>';
+  } else {
+    var totV = venc.reduce(function(s,p){ return s+p.monto; },0);
+    var totP = prox.reduce(function(s,p){ return s+p.monto; },0);
+    h += '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
+    if(venc.length) h += '<div class="stat-box" style="flex:1;min-width:140px;border-color:var(--danger)">'
+        + '<div class="stat-label" style="color:var(--danger)">Vencidos</div>'
+        + '<div class="stat-val" style="color:var(--danger);font-size:16px">'+fmt(totV)+'</div>'
+        + '<div class="stat-sub">'+venc.length+' pago(s)</div></div>';
+    h += '<div class="stat-box" style="flex:1;min-width:140px">'
+        + '<div class="stat-label">Próximos 30 días</div>'
+        + '<div class="stat-val" style="font-size:16px">'+fmt(totP)+'</div>'
+        + '<div class="stat-sub">'+prox.length+' pago(s)</div></div>';
+    h += '</div>';
+
+    var pinta = function(arr, titulo, color){
+      if(!arr.length) return '';
+      var r = '<div style="font-size:11px;font-weight:700;color:'+color+';margin:10px 0 6px;letter-spacing:.04em">'+titulo+'</div>';
+      r += '<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
+      arr.forEach(function(p,i){
+        r += '<div style="display:flex;align-items:center;gap:8px;padding:9px 11px;flex-wrap:wrap'
+           + (i<arr.length-1?';border-bottom:1px solid var(--border)':'')+'">';
+        r += '<div style="flex:1;min-width:150px">'
+           + '<div style="font-size:12px;font-weight:700">'+escDeu(p.nombre)+'</div>'
+           + '<div style="font-size:10px;color:var(--dim)">'+p.detalle+' · '+fmtDate(p.fecha)+'</div></div>';
+        r += '<div style="font-size:13px;font-weight:800;color:var(--purple);white-space:nowrap">'+fmt(p.monto)+'</div>';
+        r += '<div style="display:flex;gap:5px">';
+        if(p.tipo==='amort'){
+          r += '<button onclick="marcarPagoAmort(\''+p.id+'\')" style="padding:6px 11px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Pagar</button>';
+        } else {
+          if(p.minimo>0) r += '<button onclick="pagarCorte(\''+p.id+'\',\'minimo\')" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:11px;cursor:pointer">Mín '+fmt(p.minimo)+'</button>';
+          r += '<button onclick="pagarCorte(\''+p.id+'\',\'total\')" style="padding:6px 11px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Todo</button>';
+          r += '<button onclick="pagarCorte(\''+p.id+'\',\'otro\')" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:11px;cursor:pointer">Otro</button>';
+        }
+        r += '</div></div>';
+      });
+      return r + '</div>';
+    };
+    h += pinta(venc,'⚠️ VENCIDOS','var(--danger)');
+    h += pinta(prox,'PRÓXIMOS 30 DÍAS','var(--dim)');
+    h += '<div style="font-size:10px;color:var(--dim);margin-top:10px">'
+       + 'Al registrar un pago la lista se recalcula sola. Los créditos sin tabla de amortización '
+       + 'no aparecen aquí: se registran desde su propio detalle.</div>';
+  }
+  document.getElementById('pagos-body').innerHTML = h;
+  openSheet('pagos');
+}
+
 // ── TARJETAS: cortes mensuales ────────────────────────────────────────
 function cortesDeTarjeta(deudaId) {
   return (cortesData||[])
@@ -6056,6 +6172,14 @@ function renderDeudaList() {
     + '<span class="chip">💳 Compromiso mensual: '+fmt(compromiso)+'</span> '
     + '<span class="chip" title="Saldo x tasa anual / 12. Estimacion simple.">📈 Interés/mes aprox: '+fmt(interesMes)+'</span>'
     + '</div>';
+  var _pend = pagosPendientes(30);
+  if(_pend.length){
+    var _v = _pend.filter(function(p){ return p.vencido; }).length;
+    html += '<div style="margin-top:8px"><button onclick="openPagosPendientes()" style="padding:7px 14px;border-radius:8px;border:none;background:'
+          + (_v?'var(--danger)':'var(--purple)')+';color:#fff;font-size:12px;font-weight:600;cursor:pointer">'
+          + (_v ? '⚠️ Registrar pagos — '+_v+' vencido(s)' : '💳 Registrar pagos ('+_pend.length+')')
+          + '</button></div>';
+  }
   if(sinCompromiso>0){
     html += '<div style="font-size:10px;color:var(--warn);margin-top:6px">⚠️ '+sinCompromiso+' sin pago mensual o mínimo capturado — el compromiso real es mayor</div>';
   }
@@ -6238,11 +6362,17 @@ function renderDeudaList() {
       }
       html += '</div>';
 
+      // ¿Ya hay una via mejor para registrar el pago?
+      //   tarjeta con corte capturado -> botones del corte
+      //   credito con tabla cargada   -> boton 'pagar' por renglon
+      var _tieneViaPropia = (cat==='revolvente' && !!ultimoCorte(x.id))
+                         || (cat!=='revolvente' && amortDeDeuda(x.id).length>0);
       if(isAdmin){
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">';
         html += '<button onclick="editDeuda(\'' + x.id + '\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer">✏️ Editar</button>';
         html += '<button onclick="deleteDeuda(\'' + x.id + '\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--dim);font-size:12px;cursor:pointer">🗑 Eliminar</button>';
         html += '</div>';
+        if(!_tieneViaPropia){
         html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
         html += '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.04em">REGISTRAR PAGO</div>';
         html += '<div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">';
@@ -6259,6 +6389,7 @@ function renderDeudaList() {
         html += '<button onclick="registrarPagoDeuda(\'' + x.id + '\')" style="padding:8px 14px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">💳 Registrar</button>';
         html += '</div>';
         html += '</div>';
+        }
       }
       html += '</div></div>';
     });
