@@ -5977,8 +5977,10 @@ function renderCorteTarjeta(x, isAdmin) {
   var h='<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
   h+='<div style="font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.04em;margin-bottom:6px">ÚLTIMO CORTE</div>';
   if(!c){
-    h+='<div style="font-size:11px;color:var(--dim)">Sin cortes capturados.'
-      +(isAdmin?' Usa el botón <b>Capturar cortes</b> arriba.':'')+'</div>';
+    h+='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">Sin cortes capturados. '
+      +'Captura el corte del mes para registrar pagos de esta tarjeta.</div>';
+    if(isAdmin) h+='<button onclick="openCapturaCortes()" style="padding:7px 13px;border-radius:8px;border:1px solid var(--purple);'
+      +'background:rgba(155,126,255,.12);color:var(--purple);font-size:11px;font-weight:600;cursor:pointer">📋 Capturar corte</button>';
   } else {
     var falta=Math.max(0,(parseFloat(c.pago_no_intereses)||0)-(parseFloat(c.pagado)||0));
     var colEstado=c.estado==='pagado'?'var(--ok)':(c.estado==='parcial'?'var(--warn)':'var(--danger)');
@@ -6365,8 +6367,10 @@ function renderDeudaList() {
       // ¿Ya hay una via mejor para registrar el pago?
       //   tarjeta con corte capturado -> botones del corte
       //   credito con tabla cargada   -> boton 'pagar' por renglon
-      var _tieneViaPropia = (cat==='revolvente' && !!ultimoCorte(x.id))
-                         || (cat!=='revolvente' && amortDeDeuda(x.id).length>0);
+      // Las tarjetas se pagan siempre desde su corte: si no hay corte, la
+      // respuesta es capturarlo, no un formulario de 4 campos.
+      var _tieneViaPropia = (cat==='revolvente')
+                         || (amortDeDeuda(x.id).length>0);
       if(isAdmin){
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">';
         html += '<button onclick="editDeuda(\'' + x.id + '\')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:12px;cursor:pointer">✏️ Editar</button>';
