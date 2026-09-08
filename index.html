@@ -6192,6 +6192,24 @@ function renderAmortizacion(x, isAdmin) {
   return h;
 }
 
+// Recarga los datos sin perder el lugar donde ibas. Marcar pagos es una
+// tarea repetitiva: si en cada uno la tabla se cierra y salta al inicio, hay
+// que volver a abrirla y bajar de nuevo. Se conserva el scroll de la tabla y
+// el de la pagina.
+async function recargarConservandoVista(deudaId){
+  var tbl = deudaId ? document.getElementById('amort-'+deudaId) : null;
+  var sTabla = tbl ? tbl.scrollTop : 0;
+  var sPag   = window.scrollY;
+  await loadAll();
+  renderPlaneacion();
+  // el nodo es nuevo despues de redibujar, hay que volver a buscarlo
+  requestAnimationFrame(function(){
+    var t2 = deudaId ? document.getElementById('amort-'+deudaId) : null;
+    if(t2) t2.scrollTop = sTabla;
+    window.scrollTo(0, sPag);
+  });
+}
+
 // Marca un renglon como pagado: crea el pago real y baja el saldo.
 // El saldo se resta del REAL, no se copia del programado: si un mes pagas
 // distinto, la diferencia debe verse en vez de taparse.
