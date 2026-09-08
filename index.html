@@ -5467,6 +5467,12 @@ function renderCXPList() {
   return html;
 }
 
+// Que panel esta abierto se recuerda aqui, no solo en el estilo del nodo.
+// Antes, al marcar un pago la vista se volvia a dibujar y el panel renacia
+// con display:none: la tabla de amortizacion se cerraba sola en cada pago,
+// que es justo cuando uno quiere marcar varios seguidos.
+window._panelesAbiertos = window._panelesAbiertos || {};
+
 function toggleCXP(id) {
   var el = document.getElementById(id);
   var arrow = document.getElementById(id+'-arrow');
@@ -5474,7 +5480,12 @@ function toggleCXP(id) {
   var open = el.style.display==='block';
   el.style.display = open?'none':'block';
   if(arrow) arrow.style.transform = open?'':'rotate(180deg)';
+  if(open) delete window._panelesAbiertos[id];
+  else     window._panelesAbiertos[id] = true;
 }
+
+// Devuelve el estilo con el que debe nacer un panel, segun como quedo.
+function panelAbierto(id){ return !!window._panelesAbiertos[id]; }
 
 function toggleCXPEstatus(est) {
   if(!window._cxpFiltrosEstatus) window._cxpFiltrosEstatus = ['VENCIDO','PENDIENTE','PROXIMO'];
