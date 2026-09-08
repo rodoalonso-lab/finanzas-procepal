@@ -6269,7 +6269,7 @@ async function desmarcarPagoAmort(amortId) {
     await db('PATCH','deuda_amortizacion?id=eq.'+amortId, { estado:'pendiente', fecha_pagada:null, pago_id:null });
     if(x) await db('PATCH','deuda_financiera?id=eq.'+a.deuda_id, { saldo_actual: (parseFloat(x.saldo_actual)||0)+cap });
     showToast('Pago '+a.num_pago+' deshecho');
-    await loadAll(); renderPlaneacion();
+    await recargarConservandoVista(a.deuda_id);
   }catch(e){ showToast('Error: '+e.message,true); }
 }
 
