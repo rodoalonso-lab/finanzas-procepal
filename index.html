@@ -6145,8 +6145,10 @@ function renderAmortizacion(x, isAdmin) {
   h += '<div onclick="toggleCXP(\'' + tblId + '\')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:8px">';
   h += '<div><span style="font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.04em">TABLA DE AMORTIZACIÓN</span>'
      + '<div style="font-size:11px;color:'+col+';margin-top:3px">'+txt+'</div></div>';
+  var abierto = panelAbierto(tblId);
   h += '<div style="text-align:right"><div style="font-size:11px;color:var(--dim)">Pago '+Math.min(e.pagados+1,e.total)+' de '+e.total+'</div>'
-     + '<span id="'+tblId+'-arrow" style="color:var(--dim);font-size:12px">▼</span></div>';
+     + '<span id="'+tblId+'-arrow" style="color:var(--dim);font-size:12px'
+     + (abierto?';transform:rotate(180deg);display:inline-block':'')+'">▼</span></div>';
   h += '</div>';
 
   // Real vs programado
@@ -6160,7 +6162,8 @@ function renderAmortizacion(x, isAdmin) {
     }
   }
 
-  h += '<div id="'+tblId+'" style="display:none;margin-top:8px;max-height:340px;overflow:auto">';
+  h += '<div id="'+tblId+'" style="display:'+(abierto?'block':'none')+
+       ';margin-top:8px;max-height:340px;overflow:auto">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:10px">';
   h += '<tr style="color:var(--dim);text-align:right">'
      + '<th style="text-align:left;padding:3px">#</th><th style="text-align:left">Vence</th>'
@@ -6230,7 +6233,7 @@ async function marcarPagoAmort(amortId) {
     await db('PATCH','deuda_financiera?id=eq.'+a.deuda_id, { saldo_actual: nuevoSaldo });
 
     showToast('✅ Pago '+a.num_pago+' registrado — saldo '+fmt(nuevoSaldo));
-    await loadAll(); renderPlaneacion();
+    await recargarConservandoVista(a.deuda_id);
   }catch(e){ showToast('Error: '+e.message,true); }
 }
 
