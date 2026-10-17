@@ -1402,6 +1402,15 @@ async function dbSafe(method, path, body, contexto) {
   }
 }
 
+// Obra viva para el control presupuestal: en progreso o por arrancar, y no
+// archivada. Se compara en minusculas porque la base trae 'En progreso' con
+// mayuscula. 'cotizacion' no entra: todavia no hay contrato que controlar.
+var ESTADOS_EN_CURSO = ['en progreso','iniciando','por iniciar','pausada'];
+function obraEnCurso(o){
+  if(!o || o.archivada) return false;
+  return ESTADOS_EN_CURSO.indexOf(String(o.estado||'').trim().toLowerCase()) >= 0;
+}
+
 // ── Catálogos base (compartidos, sin límite) ─────────────────────────
 async function loadCatalogos() {
   const [_cuentas, _obras] = await Promise.all([
@@ -1670,8 +1679,12 @@ function renderDashboard() {
   // POR OBRA: egresos = requisiciones autorizadas de MetalTek, ingresos = movimientos manuales
   const porObra = {};
 
-  // Primero inicializar todas las obras con presupuesto
-  obras.forEach(function(o) {
+  // Solo las obras vivas. Antes se inicializaban TODAS, asi que el control
+  // presupuestal se llenaba de obras terminadas y de cotizaciones que ni
+  // siquiera estan contratadas, y lo que importa se perdia entre ellas.
+  // Las terminadas siguen apareciendo si tienen movimiento: el segundo
+  // bloque las vuelve a meter, y debe ser asi para no esconder dinero.
+  obras.filter(obraEnCurso).forEach(function(o) {
     porObra[o.id] = {nombre: o.nombre, pres: o.presupuesto||0, egr: 0, ing: 0, oc_adi: 0, oc_ded: 0};
   });
 
