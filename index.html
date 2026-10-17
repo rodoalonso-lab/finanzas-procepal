@@ -1688,42 +1688,50 @@ function renderDashboard() {
     porObra[o.id] = {nombre: o.nombre, pres: o.presupuesto||0, egr: 0, ing: 0, oc_adi: 0, oc_ded: 0};
   });
 
+  // Lo de obras terminadas, archivadas o en cotizacion no se mezcla en la
+  // lista, pero TAMPOCO se esconde: se acumula aqui y se muestra como un
+  // renglon aparte al final. Dinero que desaparece de un tablero es peor
+  // que dinero en un renglon que no te interesa.
+  var fueraDeCurso = {egr:0, ing:0, obras:{}};
+  function bucket(obraId){
+    if(porObra[obraId]) return porObra[obraId];
+    var ob = obras.find(function(x){ return x.id===obraId; });
+    if(ob && obraEnCurso(ob)){
+      porObra[obraId] = {nombre: ob.nombre, pres: ob.presupuesto||0, egr:0, ing:0, oc_adi:0, oc_ded:0};
+      return porObra[obraId];
+    }
+    fueraDeCurso.obras[obraId] = ob ? ob.nombre : obraId;
+    return null;   // el llamador suma en fueraDeCurso
+  }
+
   // Egresos desde requisiciones autorizadas de MetalTek
   requisicionesData.forEach(function(r) {
     if(!r.obra_id) return;
-    if(!porObra[r.obra_id]) {
-      const o = obras.find(x=>x.id===r.obra_id);
-      porObra[r.obra_id] = {nombre: o?o.nombre:r.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
-    }
-    porObra[r.obra_id].egr += parseFloat(r.monto_cotizado)||0;
+    var bR = bucket(r.obra_id);
+    if(bR) bR.egr += parseFloat(r.monto_cotizado)||0;
+    else   fueraDeCurso.egr += parseFloat(r.monto_cotizado)||0;
   });
 
   // Egresos manuales registrados en Finanzas
   egresosManualData.filter(function(m){return m.obra_id;}).forEach(function(m) {
-    if(!porObra[m.obra_id]) {
-      const o = obras.find(x=>x.id===m.obra_id);
-      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
-    }
-    porObra[m.obra_id].egr += (m.monto||0);
+    var bE = bucket(m.obra_id);
+    if(bE) bE.egr += (m.monto||0);
+    else   fueraDeCurso.egr += (m.monto||0);
   });
 
   // Ingresos desde movimientos manuales de Finanzas
   ingresos.filter(m=>m.obra_id).forEach(function(m) {
-    if(!porObra[m.obra_id]) {
-      const o = obras.find(x=>x.id===m.obra_id);
-      porObra[m.obra_id] = {nombre: o?o.nombre:m.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
-    }
-    porObra[m.obra_id].ing += (m.monto||0);
+    var bI = bucket(m.obra_id);
+    if(bI) bI.ing += (m.monto||0);
+    else   fueraDeCurso.ing += (m.monto||0);
   });
 
   // Órdenes de cambio APROBADAS por obra
   ordenesCambio.filter(function(oc){ return oc.obra_id && oc.estatus==='APROBADA'; }).forEach(function(oc) {
-    if(!porObra[oc.obra_id]) {
-      const o = obras.find(x=>x.id===oc.obra_id);
-      porObra[oc.obra_id] = {nombre: o?o.nombre:oc.obra_id, pres: o?o.presupuesto||0:0, egr:0, ing:0, oc_adi:0, oc_ded:0};
-    }
-    if(oc.tipo==='aditiva') porObra[oc.obra_id].oc_adi += (oc.monto||0);
-    else                    porObra[oc.obra_id].oc_ded += (oc.monto||0);
+    var bO = bucket(oc.obra_id);
+    if(!bO) return;                      // obra fuera de curso: no altera el tablero
+    if(oc.tipo==='aditiva') bO.oc_adi += (oc.monto||0);
+    else                    bO.oc_ded += (oc.monto||0);
   });
 
   const mesLabel = hoy.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
