@@ -1906,6 +1906,33 @@ function renderDashboard() {
         ${detalleHtml}
       </div>`;
     });
+    // Aviso de lo que no se puede comparar contra el presupuesto. Finanzas
+    // NO reclasifica: escribiria en una tabla de Metaltek y eso rompe la
+    // separacion de modulos. Solo lee, avisa y manda al lugar correcto.
+    var sinCl = requisicionesData.filter(function(r){
+      return r.obra_id && !r.tipo_insumo; });
+    if(sinCl.length){
+      var mSin = sinCl.reduce(function(a,r){ return a+(parseFloat(r.monto_cotizado)||0); },0);
+      var obrasSin = {};
+      sinCl.forEach(function(r){
+        var ob = obras.find(function(x){ return x.id===r.obra_id; });
+        var nm = ob ? ob.nombre : r.obra_id;
+        obrasSin[nm] = (obrasSin[nm]||0) + (parseFloat(r.monto_cotizado)||0);
+      });
+      var lista = Object.keys(obrasSin).sort(function(a,b){ return obrasSin[b]-obrasSin[a]; })
+        .slice(0,5).map(function(k){ return k+' '+fmt(obrasSin[k]); }).join(' · ');
+      html += `<div class="card" style="border-color:rgba(240,165,0,.4);background:rgba(240,165,0,.06)">
+        <div style="font-size:12px;line-height:1.6">
+          <b style="color:var(--warn)">⚠️ ${sinCl.length} compra(s) sin tipo de insumo — ${fmt(mSin)}</b><br>
+          <span style="color:var(--dim)">No se pueden comparar contra el presupuesto de la obra.</span><br>
+          <span style="color:var(--dim)">${lista}</span><br>
+          <span style="color:var(--dim)">Se reclasifican en <b>Metaltek → Obras → la obra → Control de obra → Costo → "Clasificar ahora"</b>.</span>
+        </div>
+        <a href="https://rodoalonso-lab.github.io/metaltek/" target="_blank"
+           style="display:inline-block;margin-top:8px;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none">Abrir Metaltek ↗</a>
+      </div>`;
+    }
+
     if(nFuera){
       // No se esconde: se dice cuanto hay y en cuantas obras, para que nadie
       // tenga que adivinar por que el tablero no cuadra con el total.
