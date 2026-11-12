@@ -4757,7 +4757,7 @@ async function verRequisicion(reqId){
   ov.innerHTML = '<div style="color:#fff;font-size:13px">Cargando…</div>';
   ov.style.display = 'flex';
 
-  var r=null, items=[], recep=[], comp=[];
+  var r=null, items=[], recep=[], comp=[], compItems=[];
   try {
     var rr = await dbSafe('GET','requisiciones?id=eq.'+reqId+'&select=*', null, 'req_ficha');
     r = rr && rr[0];
@@ -4765,6 +4765,11 @@ async function verRequisicion(reqId){
     items = await dbSafe('GET','requisicion_items?requisicion_id=eq.'+reqId+'&order=created_at', null, 'req_items') || [];
     recep = await dbSafe('GET','recepciones?requisicion_id=eq.'+reqId+'&order=created_at', null, 'req_recep') || [];
     comp  = await dbSafe('GET','comparativas?requisicion_id=eq.'+reqId+'&seleccionado=is.true', null, 'req_comp') || [];
+    // El precio no siempre vive en la requisicion: en 37 de las autorizadas
+    // esta solo en la cotizacion elegida. Se trae para poder caer ahi.
+    if(comp.length){
+      compItems = await dbSafe('GET','comparativa_items?comparativa_id=eq.'+comp[0].id, null, 'req_comp_items') || [];
+    }
   } catch(e){
     ov.innerHTML = '<div style="color:#fff">No se pudo leer: '+e.message+'</div>'; return;
   }
@@ -4783,11 +4788,25 @@ async function verRequisicion(reqId){
     recibido[k] = (recibido[k]||0) + (parseFloat(rc.cantidad_recibida)||0);
   });
 
+  // Precios de la cotizacion elegida, indexados por material.
+  var precioCotiz = {};
+  compItems.forEach(function(ci){
+    var k = String(ci.nombre_material||ci.descripcion||'').toLowerCase().trim();
+    if(k) precioCotiz[k] = parseFloat(ci.precio_unitario)||0;
+  });
+
+  var hayFallback = false;
   var filas = items.length ? items.map(function(it){
     var nom = it.nombre_material || it.descripcion || '—';
     var sol = parseFloat(it.cantidad)||0;
     var rec = recibido[String(nom).toLowerCase().trim()]||0;
     var pu  = parseFloat(it.precio_unitario)||0;
+    // si la requisicion no trae precio, se usa el de la cotizacion
+    var deCotiz = false;
+    if(!pu){
+      var pc = precioCotiz[String(nom).toLowerCase().trim()];
+      if(pc){ pu = pc; deCotiz = true; hayFallback = true; }
+    }
     var pend = Math.max(0, sol-rec);
     return '<tr>'+
       '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;font-weight:600">'+_escR(nom)+
@@ -4795,7 +4814,8 @@ async function verRequisicion(reqId){
       '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:center">'+sol+' '+_escR(it.unidad||'pza')+'</td>'+
       '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:center;color:'+(rec>0?'#10B981':'#9CA3AF')+';font-weight:600">'+(rec||'—')+'</td>'+
       '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:center;color:'+(pend>0?'#F59E0B':'#9CA3AF')+'">'+(pend>0?pend:'—')+'</td>'+
-      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:right">'+(pu?fmt(pu):'—')+'</td>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:right">'+
+        (pu?fmt(pu)+(deCotiz?'<span style="color:#9CA3AF"> *</span>':''):'<span style="color:#9CA3AF">sin precio</span>')+'</td>'+
       '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:right;font-weight:700">'+(pu?fmt(pu*sol):'—')+'</td>'+
       '</tr>';
   }).join('') : '<tr><td colspan="6" style="padding:16px;text-align:center;color:#9CA3AF;font-size:12px">Esta requisición no tiene materiales capturados.</td></tr>';
@@ -4838,6 +4858,10 @@ async function verRequisicion(reqId){
       '<tr style="border-top:1.5px solid #111"><td style="padding:5px 14px 0 0;font-weight:800">Total</td>'+
       '<td style="text-align:right;font-weight:800;font-size:15px">'+fmt(tot)+'</td></tr></table>'+
     '</div>'+
+    (hayFallback?'<div style="font-size:11px;color:#6B7280;margin-bottom:10px">* Precio tomado de la cotización autorizada: la requisición se capturó sin precio unitario.</div>':'')+
+    (items.length && !items.some(function(it){ return (parseFloat(it.precio_unitario)||0)>0; }) && !hayFallback
+      ? '<div style="font-size:11px;color:#B45309;background:#FEF3C7;border-left:3px solid #F59E0B;padding:8px 10px;margin-bottom:12px">Esta requisición se autorizó por monto global, sin precios por renglón. El total de abajo es el autorizado.</div>'
+      : '')+
     (r.notas?'<div style="font-size:11.5px;color:#374151;background:#F9FAFB;border-left:3px solid #D1D5DB;padding:8px 10px;margin-bottom:14px"><b>Notas:</b> '+_escR(r.notas)+'</div>':'')+
     '<div style="display:flex;gap:8px;justify-content:flex-end" class="req-ficha-botones">'+
       '<button id="req-print" style="padding:8px 16px;border-radius:8px;border:none;background:#111;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ Imprimir / Guardar PDF</button>'+
