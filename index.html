@@ -1819,7 +1819,8 @@ function renderDashboard() {
         movObra.push({fecha:m.fecha||'', tipo:'ingreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
       });
       requisicionesData.filter(r=>r.obra_id===obraId).forEach(r=>{
-        movObra.push({fecha:r.fecha||'', tipo:'egreso', desc:r.folio||r.tipo||'Requisición', cat:'Requisición', monto:parseFloat(r.monto_cotizado)||0, extra:r.proveedor||null});
+        // reqId viaja con el movimiento para poder abrir su ficha al tocarlo
+        movObra.push({fecha:r.fecha||'', tipo:'egreso', desc:r.folio||r.tipo||'Requisición', cat:'Requisición', monto:parseFloat(r.monto_cotizado)||0, extra:r.proveedor||null, reqId:r.id});
       });
       egresosManualData.filter(m=>m.obra_id===obraId).forEach(m=>{
         movObra.push({fecha:m.fecha||'', tipo:'egreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
@@ -1851,9 +1852,10 @@ function renderDashboard() {
             const bdr = i<movObra.length-1 ? 'border-bottom:1px solid var(--border)22' : '';
             const sc  = m.saldo>=0 ? 'var(--success)' : 'var(--danger)';
             const sSign = m.saldo>=0?'+':'-';
-            detalleHtml += `<tr style="${bdr}">`;
+            const clicable = !!m.reqId;
+            detalleHtml += `<tr style="${bdr}${clicable?';cursor:pointer':''}"${clicable?` class="req-row" data-req="${m.reqId}" title="Ver el detalle de la compra"`:''}>`;
             detalleHtml += `<td style="padding:5px 6px;color:var(--dim);white-space:nowrap;font-size:10px">${fmtDate(m.fecha)}</td>`;
-            detalleHtml += `<td style="padding:5px 6px;color:var(--text)">${m.desc}${m.extra?`<br><span style="font-size:10px;color:var(--dim)">${m.extra}</span>`:''}</td>`;
+            detalleHtml += `<td style="padding:5px 6px;color:var(--text)">${clicable?`<span style="color:var(--accent);font-weight:700">${m.desc} ↗</span>`:m.desc}${m.extra?`<br><span style="font-size:10px;color:var(--dim)">${m.extra}</span>`:''}</td>`;
             detalleHtml += `<td style="padding:5px 6px;text-align:right;color:var(--success);font-weight:700">${m.tipo==='ingreso'?fmt(m.monto):''}</td>`;
             detalleHtml += `<td style="padding:5px 6px;text-align:right;color:var(--danger);font-weight:700">${m.tipo==='egreso'?fmt(m.monto):''}</td>`;
             detalleHtml += `<td style="padding:5px 6px;text-align:right;font-weight:800;color:${sc};font-family:'Bricolage Grotesque',sans-serif">${sSign}${fmt(Math.abs(m.saldo))}</td>`;
