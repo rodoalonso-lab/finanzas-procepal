@@ -4726,6 +4726,7 @@ function renderSolicitudesPago() {
 
 function toggleSeccionNotif() {
   _notifSeccionPlegada = !_notifSeccionPlegada;
+  try { localStorage.setItem('fin_notif_plegada', _notifSeccionPlegada?'1':'0'); } catch(e){}
   renderDashboard();
 }
 
@@ -5230,7 +5231,14 @@ var _notifInterval   = null;
 var _notifIdsVistos  = new Set(); // ids de solicitudes ya notificadas
 var _obraExpandidas  = new Set(); // ids de obras con detalle cronológico
 var _notifExpandidas    = new Set(); // ids de notificaciones expandidas
-var _notifSeccionPlegada = false;     // sección notificaciones colapsada
+// Las notificaciones nacen PLEGADAS: ocupaban la pantalla completa cada vez
+// que se abria el modulo, empujando hacia abajo el balance por obra, que es
+// a lo que uno entra. El contador con el numero sigue visible, asi que no
+// se pierde el aviso; solo deja de estorbar.
+var _notifSeccionPlegada = (function(){
+  try { var v = localStorage.getItem('fin_notif_plegada'); return v===null ? true : v==='1'; }
+  catch(e){ return true; }
+})();
 var _solExpandidas   = new Set(); // ids de solicitudes con cuerpo visible
 var _solIniciadas    = new Set(); // evita re-inicializar estado de expansión
 var _notifPermOk     = false;
