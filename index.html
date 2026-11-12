@@ -4841,6 +4841,7 @@ async function verRequisicion(reqId){
       dato('Fecha', fmtDate(r.fecha))+
       dato('Partida', _escR(r.partida||'—'))+
       dato('Tipo de insumo', _escR(r.tipo_insumo||'sin clasificar'))+
+      dato('Forma de pago', (r.forma_pago==='tarjeta'?'Tarjeta':r.forma_pago==='efectivo'?'Efectivo':'Transferencia'))+
     '</div>'+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
       '<thead><tr style="background:#F3F4F6">'+
