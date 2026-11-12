@@ -2007,6 +2007,7 @@ function renderDashboard() {
   }
 
   document.getElementById('main-content').innerHTML = html;
+  engancharFilasReq();   // los renglones de requisicion abren su ficha
 }
 
 // ── CUENTAS ───────────────────────────────────────────
@@ -4844,6 +4845,18 @@ function cerrarRequisicion(){
 function _escR(x){
   return String(x===null||x===undefined?'':x)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Engancha los renglones de requisicion. Se llama despues de cada render
+// porque los nodos se vuelven a crear.
+function engancharFilasReq(){
+  Array.prototype.forEach.call(document.querySelectorAll('.req-row'), function(tr){
+    if(tr._lig) return; tr._lig = true;
+    tr.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      verRequisicion(tr.getAttribute('data-req'));
+    });
+  });
 }
 
 function toggleObra(obraId) {
