@@ -4719,6 +4719,133 @@ function toggleNotif(nid) {
   renderDashboard();
 }
 
+// ── FICHA DE REQUISICIÓN ─────────────────────────────────────────────
+// Que se compró, a quién y en cuánto. Solo lectura: Finanzas consulta
+// requisiciones de MetalTek, nunca las modifica.
+//
+// No se reusa el PDF de la app de Requisiciones a proposito: ese dibuja en
+// un overlay propio y sus fotos viven en el localStorage del telefono donde
+// se capturaron, asi que aqui saldrian vacias. Esta ficha trae lo que si
+// esta en la base y se imprime a PDF desde el navegador.
+async function verRequisicion(reqId){
+  var ov = document.getElementById('req-ficha-overlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'req-ficha-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;'+
+      'display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(ev){ if(ev.target===ov) cerrarRequisicion(); });
+  }
+  ov.innerHTML = '<div style="color:#fff;font-size:13px">Cargando…</div>';
+  ov.style.display = 'flex';
+
+  var r=null, items=[], recep=[], comp=[];
+  try {
+    var rr = await dbSafe('GET','requisiciones?id=eq.'+reqId+'&select=*', null, 'req_ficha');
+    r = rr && rr[0];
+    if(!r){ ov.innerHTML='<div style="color:#fff">No se encontró la requisición.</div>'; return; }
+    items = await dbSafe('GET','requisicion_items?requisicion_id=eq.'+reqId+'&order=created_at', null, 'req_items') || [];
+    recep = await dbSafe('GET','recepciones?requisicion_id=eq.'+reqId+'&order=created_at', null, 'req_recep') || [];
+    comp  = await dbSafe('GET','comparativas?requisicion_id=eq.'+reqId+'&seleccionado=is.true', null, 'req_comp') || [];
+  } catch(e){
+    ov.innerHTML = '<div style="color:#fff">No se pudo leer: '+e.message+'</div>'; return;
+  }
+
+  var obra = obras.find(function(x){ return x.id===r.obra_id; });
+  var folio = r.folio || ('REQ-'+String(r.id).slice(0,6).toUpperCase());
+  var prov = (comp[0] && comp[0].proveedor) || r.proveedor || '—';
+  var sub = parseFloat(r.monto_cotizado)||0;
+  var iva = parseFloat(r.iva_cotizado)||0;
+  var tot = parseFloat(r.monto_total_con_iva)|| (sub+iva);
+
+  // Lo recibido se agrupa por material para poder cruzarlo con lo pedido.
+  var recibido = {};
+  recep.forEach(function(rc){
+    var k = String(rc.nombre_material||'').toLowerCase().trim();
+    recibido[k] = (recibido[k]||0) + (parseFloat(rc.cantidad_recibida)||0);
+  });
+
+  var filas = items.length ? items.map(function(it){
+    var nom = it.nombre_material || it.descripcion || '—';
+    var sol = parseFloat(it.cantidad)||0;
+    var rec = recibido[String(nom).toLowerCase().trim()]||0;
+    var pu  = parseFloat(it.precio_unitario)||0;
+    var pend = Math.max(0, sol-rec);
+    return '<tr>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;font-weight:600">'+_escR(nom)+
+        (it.especificaciones?'<div style="font-size:11px;color:#6B7280;font-weight:400">'+_escR(it.especificaciones)+'</div>':'')+'</td>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:center">'+sol+' '+_escR(it.unidad||'pza')+'</td>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:center;color:'+(rec>0?'#10B981':'#9CA3AF')+';font-weight:600">'+(rec||'—')+'</td>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:center;color:'+(pend>0?'#F59E0B':'#9CA3AF')+'">'+(pend>0?pend:'—')+'</td>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:right">'+(pu?fmt(pu):'—')+'</td>'+
+      '<td style="padding:7px 9px;border-bottom:1px solid #E5E7EB;font-size:12.5px;text-align:right;font-weight:700">'+(pu?fmt(pu*sol):'—')+'</td>'+
+      '</tr>';
+  }).join('') : '<tr><td colspan="6" style="padding:16px;text-align:center;color:#9CA3AF;font-size:12px">Esta requisición no tiene materiales capturados.</td></tr>';
+
+  var dato = function(k,v){
+    return '<div><div style="font-size:9.5px;letter-spacing:.08em;color:#9CA3AF;text-transform:uppercase">'+k+'</div>'+
+           '<div style="font-size:12.5px;font-weight:700;color:#111">'+v+'</div></div>';
+  };
+
+  ov.innerHTML =
+   '<div id="req-ficha" style="background:#fff;color:#111;width:100%;max-width:820px;max-height:92vh;overflow:auto;'+
+     'border-radius:14px;padding:22px 24px;font-family:\'Space Grotesk\',Arial,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px">'+
+      '<div><div style="font-size:19px;font-weight:800;letter-spacing:.02em">PROCEPAL</div>'+
+      '<div style="font-size:11px;color:#6B7280;letter-spacing:.14em;text-transform:uppercase">Detalle de compra</div></div>'+
+      '<div style="text-align:right"><div style="font-size:17px;font-weight:800">'+_escR(folio)+'</div>'+
+      '<div style="font-size:11px;color:#6B7280">'+_escR(r.estado||'')+'</div></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 16px;margin-bottom:16px">'+
+      dato('Obra', _escR(obra?obra.nombre:'—'))+
+      dato('Proveedor', _escR(prov))+
+      dato('Solicitó', _escR(r.solicitante||'—'))+
+      dato('Fecha', fmtDate(r.fecha))+
+      dato('Partida', _escR(r.partida||'—'))+
+      dato('Tipo de insumo', _escR(r.tipo_insumo||'sin clasificar'))+
+    '</div>'+
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
+      '<thead><tr style="background:#F3F4F6">'+
+        '<th style="padding:7px 9px;text-align:left;font-size:10px;letter-spacing:.06em;color:#6B7280;text-transform:uppercase">Material</th>'+
+        '<th style="padding:7px 9px;text-align:center;font-size:10px;letter-spacing:.06em;color:#6B7280;text-transform:uppercase">Pedido</th>'+
+        '<th style="padding:7px 9px;text-align:center;font-size:10px;letter-spacing:.06em;color:#6B7280;text-transform:uppercase">Recibido</th>'+
+        '<th style="padding:7px 9px;text-align:center;font-size:10px;letter-spacing:.06em;color:#6B7280;text-transform:uppercase">Pendiente</th>'+
+        '<th style="padding:7px 9px;text-align:right;font-size:10px;letter-spacing:.06em;color:#6B7280;text-transform:uppercase">P. unitario</th>'+
+        '<th style="padding:7px 9px;text-align:right;font-size:10px;letter-spacing:.06em;color:#6B7280;text-transform:uppercase">Importe</th>'+
+      '</tr></thead><tbody>'+filas+'</tbody></table>'+
+    '<div style="display:flex;justify-content:flex-end;margin-bottom:14px">'+
+      '<table style="font-size:12.5px"><tr><td style="padding:3px 14px 3px 0;color:#6B7280">Subtotal autorizado</td>'+
+      '<td style="text-align:right;font-weight:700">'+fmt(sub)+'</td></tr>'+
+      '<tr><td style="padding:3px 14px 3px 0;color:#6B7280">IVA</td><td style="text-align:right">'+fmt(iva)+'</td></tr>'+
+      '<tr style="border-top:1.5px solid #111"><td style="padding:5px 14px 0 0;font-weight:800">Total</td>'+
+      '<td style="text-align:right;font-weight:800;font-size:15px">'+fmt(tot)+'</td></tr></table>'+
+    '</div>'+
+    (r.notas?'<div style="font-size:11.5px;color:#374151;background:#F9FAFB;border-left:3px solid #D1D5DB;padding:8px 10px;margin-bottom:14px"><b>Notas:</b> '+_escR(r.notas)+'</div>':'')+
+    '<div style="display:flex;gap:8px;justify-content:flex-end" class="req-ficha-botones">'+
+      '<button id="req-print" style="padding:8px 16px;border-radius:8px;border:none;background:#111;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ Imprimir / Guardar PDF</button>'+
+      '<button id="req-close" style="padding:8px 16px;border-radius:8px;border:1px solid #D1D5DB;background:#fff;color:#111;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">Cerrar</button>'+
+    '</div>'+
+   '</div>';
+
+  document.getElementById('req-close').addEventListener('click', cerrarRequisicion);
+  document.getElementById('req-print').addEventListener('click', function(){
+    document.body.classList.add('imp-req');
+    var quitar=function(){ document.body.classList.remove('imp-req'); };
+    window.addEventListener('afterprint', quitar, {once:true});
+    setTimeout(quitar, 60000);
+    window.print();
+  });
+}
+function cerrarRequisicion(){
+  var ov=document.getElementById('req-ficha-overlay');
+  if(ov) ov.style.display='none';
+}
+function _escR(x){
+  return String(x===null||x===undefined?'':x)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function toggleObra(obraId) {
   if(_obraExpandidas.has(obraId)) _obraExpandidas.delete(obraId);
   else _obraExpandidas.add(obraId);
