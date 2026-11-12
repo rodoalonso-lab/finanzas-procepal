@@ -525,6 +525,21 @@ body.tema-claro .nav-sub-tab:hover  { background: var(--surface); }
 .sub-tab:hover{color:var(--text2)}
 .sub-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 body.tema-claro .sub-nav{background:#FFFFFF}
+
+  /* ── Impresión de la ficha de requisición ──────────────────────────
+     Al imprimir se oculta la app entera y queda solo la ficha, que ya
+     viene en blanco. La clase la pone el boton y se quita al terminar. */
+  @media print {
+    body.imp-req > *:not(#req-ficha-overlay) { display:none !important; }
+    body.imp-req { background:#fff !important; padding:0 !important; }
+    body.imp-req #req-ficha-overlay { position:static !important; background:none !important;
+      padding:0 !important; display:block !important; }
+    body.imp-req #req-ficha { max-width:none !important; max-height:none !important;
+      overflow:visible !important; border-radius:0 !important; padding:0 !important;
+      box-shadow:none !important; }
+    body.imp-req .req-ficha-botones { display:none !important; }
+    @page { size:Letter portrait; margin:14mm; }
+  }
 </style>
 </head>
 <body>
