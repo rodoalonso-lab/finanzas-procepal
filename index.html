@@ -4997,17 +4997,18 @@ function imprimirObra(obraId) {
   function fmtP(n){ return '$\u00a0'+n.toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   function fmtDate2(d){ if(!d) return '—'; var dt=new Date(d+'T12:00:00'); return dt.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}); }
 
-  var rows = movObra.map(function(m,i){
-    var bg = i%2===0?'#f9f9f9':'#fff';
-    var sc = m.saldo>=0?'#0d7a5f':'#c0392b';
-    var sSign = m.saldo>=0?'+':'-';
-    return '<tr style="background:'+bg+'">' +
-      '<td style="padding:6px 8px;white-space:nowrap;color:#555">'+fmtDate2(m.fecha)+'</td>'+
-      '<td style="padding:6px 8px">'+m.desc+(m.extra?'<br><span style="color:#888;font-size:10px">'+m.extra+'</span>':'')+'</td>'+
-      '<td style="padding:6px 8px;color:#888">'+m.cat+'</td>'+
-      '<td style="padding:6px 8px;text-align:right;color:#0d7a5f;font-weight:600">'+(m.tipo==='ingreso'?fmtP(m.monto):'')+'</td>'+
-      '<td style="padding:6px 8px;text-align:right;color:#c0392b;font-weight:600">'+(m.tipo==='egreso'?fmtP(m.monto):'')+'</td>'+
-      '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+sc+'">'+sSign+fmtP(Math.abs(m.saldo))+'</td>'+
+  // Filas con las clases del impreso PROCEPAL, no estilos sueltos: así heredan
+  // la paleta y los totales quedan alineados con el resto de los documentos.
+  var rows = movObra.map(function(m){
+    var nom = /Nómina|Indirecto oficina/.test(m.desc);
+    return '<tr'+(nom?' class="pr-sub"':'')+'>'+
+      '<td style="white-space:nowrap;color:#5A8FA8">'+fmtDate2(m.fecha)+'</td>'+
+      '<td class="per">'+m.desc+(m.extra?'<div class="ob">'+m.extra+'</div>':'')+'</td>'+
+      '<td class="cat">'+m.cat+'</td>'+
+      '<td class="num" style="color:#15803D;font-weight:700">'+(m.tipo==='ingreso'?fmtP(m.monto):'<span class="cero">—</span>')+'</td>'+
+      '<td class="num" style="color:#B91C1C;font-weight:700">'+(m.tipo==='egreso'?fmtP(m.monto):'<span class="cero">—</span>')+'</td>'+
+      '<td class="num fuerte" style="color:'+(m.saldo>=0?'#15803D':'#B91C1C')+'">'+
+        (m.saldo>=0?'+':'-')+fmtP(Math.abs(m.saldo))+'</td>'+
       '</tr>';
   }).join('');
 
