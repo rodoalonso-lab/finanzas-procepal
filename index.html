@@ -15,24 +15,28 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
-  --bg: #070B14;
-  --surface: #0D1525;
-  --card: #111d33;
-  --card2: #162040;
-  --border: #1e2d4a;
-  --border2: #263650;
-  --accent: #00E5B0;
-  --accent-dim: #00E5B018;
-  --accent2: #4D8EFF;
-  --accent2-dim: #4D8EFF18;
-  --warn: #F4A84A;
-  --danger: #FF4D6A;
-  --success: #00D18C;
-  --purple: #9B7EFF;
-  --text: #E4EBF8;
-  --text2: #9BAAC4;
-  --dim: #5A6B8A;
-  --dim2: #2D3D57;
+  /* Paleta PROCEPAL, la misma de Metaltek. Se conservan los nombres de
+     variable para no tocar las ~2,000 referencias del archivo; sólo cambian
+     los valores. Antes Finanzas era casi negra con verde neón y Metaltek
+     azul marino con turquesa: parecían dos sistemas distintos. */
+  --bg: #0A1628;          /* Metaltek --bg */
+  --surface: #0E1B31;     /* un escalón sobre el fondo, para barras */
+  --card: #112240;        /* Metaltek --surface */
+  --card2: #16294A;
+  --border: #1E3A5F;      /* Metaltek --border */
+  --border2: #26496F;
+  --accent: #5BC4C0;      /* Metaltek --accent */
+  --accent-dim: #5BC4C018;
+  --accent2: #3B9EBF;     /* Metaltek --info */
+  --accent2-dim: #3B9EBF18;
+  --warn: #F0A500;        /* Metaltek --warning */
+  --danger: #EF4444;      /* Metaltek --danger */
+  --success: #10B981;     /* verde distinto del turquesa: ingreso vs egreso */
+  --purple: #A78BFA;      /* el mismo morado de los badges de taller */
+  --text: #E8F4F8;        /* Metaltek --text */
+  --text2: #8BBFD4;       /* Metaltek --muted */
+  --dim: #5A8FA8;         /* Metaltek --dim */
+  --dim2: #2D4A63;
   --r: 16px;
   --r-sm: 10px;
   --r-lg: 22px;
@@ -41,8 +45,8 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
 
-/* ── NOISE TEXTURE OVERLAY ── */
-body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:1000;opacity:.4}
+/* La textura de ruido se quitó: Metaltek no la tiene y enturbiaba el azul,
+   que era parte de por qué las dos apps no se veían del mismo sistema. */
 
 /* ── LOGIN ── */
 #login-screen{
