@@ -1421,6 +1421,14 @@ async function dbSafe(method, path, body, contexto) {
 // archivada. Se compara en minusculas porque la base trae 'En progreso' con
 // mayuscula. 'cotizacion' no entra: todavia no hay contrato que controlar.
 var ESTADOS_EN_CURSO = ['en progreso','iniciando','por iniciar','pausada'];
+// Nómina que se registró como egreso manual antes de que existiera el módulo.
+// El patrón es el que se usó: "NOMINA SEMANA n" o "SEMANA n".
+function esNominaManual(m){
+  if(!m) return false;
+  if(String(m.categoria||'').trim().toLowerCase() !== 'mano de obra') return false;
+  return /^(n[oó]mina\s+)?semana\s+\d+\s*$/i.test(String(m.descripcion||'').trim());
+}
+
 function obraEnCurso(o){
   if(!o || o.archivada) return false;
   return ESTADOS_EN_CURSO.indexOf(String(o.estado||'').trim().toLowerCase()) >= 0;
@@ -1441,7 +1449,7 @@ async function loadCatalogos() {
 //          movimientos (Finanzas — solo ingresos manuales)
 async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet] = await Promise.all([
+  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet, _nom] = await Promise.all([
     dbSafe('GET',
       'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
       null, 'movimientos_ingreso'),
@@ -1455,6 +1463,10 @@ async function loadControlPresupuestal() {
     dbSafe('GET', 'ordenes_cambio?order=fecha.desc', null, 'ordenes_cambio'),
     dbSafe('GET', 'v_ejecucion_por_obra', null, 'ejecucion_obra'),
     dbSafe('GET', 'v_ejecucion_presupuestal', null, 'ejecucion_det'),
+    // Nómina cerrada de MetalTek: mano de obra directa + el prorrateo de
+    // oficina como indirecto. Sin esto el presupuesto por obra ignoraba el
+    // costo de la gente, que es el renglón más grande de todos.
+    dbSafe('GET', 'v_obra_nomina', null, 'nomina_obra'),
   ]);
   movimientos       = _movIng;
   egresosManualData = _movEgr;
@@ -1462,7 +1474,8 @@ async function loadControlPresupuestal() {
   ordenesCambio     = _oc;
   ejecucionData     = _ejec;
   ejecucionDetalleData = _ejecDet;
-  console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas');
+  nominaObraData    = _nom || [];
+  console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas, ' + nominaObraData.length + ' renglones de nómina por obra');
 }
 
 // ── MÓDULO 2: Fiscalización ──────────────────────────────────────────
@@ -1727,11 +1740,21 @@ function renderDashboard() {
     else   fueraDeCurso.egr += parseFloat(r.monto_cotizado)||0;
   });
 
-  // Egresos manuales registrados en Finanzas
-  egresosManualData.filter(function(m){return m.obra_id;}).forEach(function(m) {
-    var bE = bucket(m.obra_id);
-    if(bE) bE.egr += (m.monto||0);
-    else   fueraDeCurso.egr += (m.monto||0);
+  // Egresos manuales registrados en Finanzas. La nómina capturada a mano
+  // antes del módulo se excluye: ese mismo dinero entra ahora por nominaObraData
+  // y contarlo aquí lo duplicaría. El movimiento sigue en el libro de caja.
+  egresosManualData.filter(function(m){ return m.obra_id && !esNominaManual(m); })
+    .forEach(function(m) {
+      var bE = bucket(m.obra_id);
+      if(bE) bE.egr += (m.monto||0);
+      else   fueraDeCurso.egr += (m.monto||0);
+    });
+
+  // Nómina cerrada por obra (MetalTek, solo lectura)
+  nominaObraData.filter(function(x){ return x.obra_id; }).forEach(function(x) {
+    var bN = bucket(x.obra_id);
+    if(bN) bN.egr += (parseFloat(x.pagado)||0);
+    else   fueraDeCurso.egr += (parseFloat(x.pagado)||0);
   });
 
   // Ingresos desde movimientos manuales de Finanzas
@@ -3241,6 +3264,7 @@ let movBancariosPorCuenta = {};
 let movBancariosDB = [];
 let requisicionesData = []; // Solo lectura desde MetalTek — NO se modifica desde Finanzas
 let egresosManualData = []; // Egresos manuales registrados en Finanzas (movimientos tipo=egreso)
+let nominaObraData    = []; // Nómina cerrada por obra (v_obra_nomina, MetalTek, solo lectura)
 let cxpData = [];       // cuentas por pagar
 let ejecucionData = []; // v_ejecucion_por_obra
 let ejecucionDetalleData = []; // v_ejecucion_presupuestal
