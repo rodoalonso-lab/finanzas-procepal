@@ -1453,7 +1453,7 @@ async function loadCatalogos() {
 //          movimientos (Finanzas — solo ingresos manuales)
 async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet, _nom, _nomSem] = await Promise.all([
+  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet, _nom, _nomSem, _cob] = await Promise.all([
     dbSafe('GET',
       'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
       null, 'movimientos_ingreso'),
@@ -1475,6 +1475,10 @@ async function loadControlPresupuestal() {
     // de cada obra. El agregado de arriba es la suma de esto, así que el
     // encabezado y la lista no pueden discrepar.
     dbSafe('GET', 'v_obra_nomina_semana?order=fecha_fin', null, 'nomina_semana'),
+    // Cobranza: lo presentado al cliente y lo que falta por cobrar. NO entra
+    // al balance — el ingreso sigue siendo sólo el dinero que ya entró — pero
+    // sin verlo no se sabe cuánto hay en la calle.
+    dbSafe('GET', 'v_obra_cobranza', null, 'cobranza'),
   ]);
   movimientos       = _movIng;
   egresosManualData = _movEgr;
@@ -1484,6 +1488,7 @@ async function loadControlPresupuestal() {
   ejecucionDetalleData = _ejecDet;
   nominaObraData    = _nom || [];
   nominaSemanaData  = _nomSem || [];
+  cobranzaData      = _cob || [];
   console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas, ' + nominaObraData.length + ' renglones de nómina por obra');
 }
 
@@ -3292,6 +3297,7 @@ let requisicionesData = []; // Solo lectura desde MetalTek — NO se modifica de
 let egresosManualData = []; // Egresos manuales registrados en Finanzas (movimientos tipo=egreso)
 let nominaObraData    = []; // Nómina cerrada por obra (v_obra_nomina, MetalTek, solo lectura)
 let nominaSemanaData  = []; // La misma nómina desglosada por semana, para el detalle cronológico
+let cobranzaData      = []; // v_obra_cobranza: estimado, cobrado, por cobrar y retenido
 let cxpData = [];       // cuentas por pagar
 let ejecucionData = []; // v_ejecucion_por_obra
 let ejecucionDetalleData = []; // v_ejecucion_presupuestal
