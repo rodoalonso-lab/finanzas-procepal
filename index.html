@@ -1864,6 +1864,11 @@ function renderDashboard() {
       const balSign    = balance>=0?'+':'-';
       const mostrarPres = presAjust>0;
       const expandida  = _obraExpandidas.has(obraId);
+      // Cobranza: no suma al balance, pero es lo que falta por entrar.
+      const cob = cobranzaData.find(function(c){ return c.obra_id===obraId; }) || null;
+      const porCobrar = cob ? (parseFloat(cob.por_cobrar)||0) : 0;
+      const retenido  = cob ? (parseFloat(cob.retenido_garantia)||0) : 0;
+      const vencidas  = cob ? (parseInt(cob.presentadas_sin_pagar,10)||0) : 0;
 
       // Movimientos cronológicos para detalle
       const movObra = [];
@@ -1963,6 +1968,12 @@ function renderDashboard() {
             ${tieneOC&&presBase>0?`<div style="font-size:9px;color:var(--dim);margin-top:2px">Base: ${fmt(presBase)}</div>`:''}
           </div>`:''}
         </div>
+        <!-- Cobranza: derecho de cobro, no dinero. Por eso va en chips y no
+             en el grid de cifras, que es dinero real. -->
+        ${(porCobrar>0.01||retenido>0.01)?`<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          ${porCobrar>0.01?`<span style="font-size:10px;background:rgba(240,165,0,.12);color:var(--warn);border:1px solid rgba(240,165,0,.25);border-radius:20px;padding:2px 9px;font-weight:700" title="Estimaciones y anticipos presentados que el cliente aún no paga. No cuenta como ingreso.">⏳ Por cobrar ${fmt(porCobrar)}${vencidas>0?` · ${vencidas} presentada${vencidas>1?'s':''}`:''}</span>`:''}
+          ${retenido>0.01?`<span style="font-size:10px;background:rgba(59,158,191,.12);color:var(--accent2);border:1px solid rgba(59,158,191,.25);border-radius:20px;padding:2px 9px;font-weight:700" title="Fondo de garantía que retiene el cliente. Se recupera en el finiquito.">🔒 Retenido ${fmt(retenido)}</span>`:''}
+        </div>`:''}
         <!-- Órdenes de cambio badge -->
         ${tieneOC?`<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           ${ocAdi>0?`<span style="font-size:10px;background:rgba(0,209,140,.12);color:var(--success);border:1px solid rgba(0,209,140,.25);border-radius:20px;padding:2px 8px;font-weight:700">▲ Aditiva +${fmt(ocAdi)}</span>`:''}
