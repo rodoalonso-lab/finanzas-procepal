@@ -5859,8 +5859,71 @@ function resetCXCFiltros() {
 }
 
 // ── CXC ───────────────────────────────────────────────────────────────
+// Estimaciones de obra que todavía no tienen su cuenta por cobrar. La
+// estimación nace en Control de Obra (MetalTek); la CxC la crea Finanzas, que
+// es la dueña de la tabla. Así se ligan sin que MetalTek escriba aquí.
+function renderEstimPendientes(){
+  if(!estimSinCxc || !estimSinCxc.length) return '';
+  var tot = estimSinCxc.reduce(function(a,e){ return a + (parseFloat(e.total)||0); }, 0);
+  var h = '<div class="card" style="margin-bottom:12px;border-color:rgba(240,165,0,.35);'
+        + 'background:rgba(240,165,0,.05)">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+        + '<div><div style="font-size:13px;font-weight:700;color:var(--warn)">📄 Estimaciones sin facturar</div>'
+        + '<div style="font-size:10px;color:var(--dim)">Vienen de Control de Obra. Genera su CxC para darles seguimiento de cobro.</div></div>'
+        + '<div style="text-align:right"><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;'
+        + 'font-weight:800;color:var(--warn)">'+fmt(tot)+'</div>'
+        + '<div style="font-size:9px;color:var(--dim)">'+estimSinCxc.length+' documento'+(estimSinCxc.length>1?'s':'')+'</div></div></div>';
+  estimSinCxc.forEach(function(e){
+    var esAnt = String(e.tipo).toLowerCase()==='anticipo';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;'
+       + 'padding:8px 0;border-top:1px solid var(--border)">'
+       + '<div style="min-width:0;flex:1">'
+       + '<div style="font-size:12px;font-weight:700">'+(esAnt?'💰 Anticipo':'📄 Estimación '+e.no)
+       + (e.periodo?' · '+e.periodo:'')+'</div>'
+       + '<div style="font-size:10px;color:var(--dim)">'+(e.obra||'—')
+       + (e.fecha_presentada?' · presentada '+fmtDate(e.fecha_presentada)
+          :' · <span style="color:var(--warn)">sin fecha de presentación</span>')+'</div></div>'
+       + '<div style="text-align:right;flex:none">'
+       + '<div style="font-size:13px;font-weight:800">'+fmt(e.total)+'</div></div>'
+       + '<button class="btn btn-sm" data-gen-cxc="'+e.estimacion_id+'" '
+       + 'style="flex:none;background:var(--accent);color:#0A1628;border:none;border-radius:8px;'
+       + 'padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Barlow\',sans-serif">'
+       + 'Generar CxC</button></div>';
+  });
+  return h + '</div>';
+}
+
+// Crea la CxC a partir de la estimación y la deja lista para cobro.
+async function generarCxcDesdeEstimacion(estimId){
+  var e = (estimSinCxc||[]).find(function(x){ return x.estimacion_id===estimId; });
+  if(!e){ showToast('No se encontró la estimación', true); return; }
+  var esAnt = String(e.tipo).toLowerCase()==='anticipo';
+  try {
+    await db('POST','cuentas_por_cobrar', {
+      cliente:    e.cliente || e.obra || '—',
+      negocio:    'PROCEPAL',
+      factura:    (esAnt ? 'ANTICIPO' : 'EST-'+e.no) + ' · ' + (e.obra||''),
+      subtotal:   parseFloat(e.subtotal)||0,
+      iva:        parseFloat(e.iva)||0,
+      monto:      parseFloat(e.total)||0,
+      pagado:     parseFloat(e.importe_cobrado)||0,
+      saldo:      Math.max(0,(parseFloat(e.total)||0)-(parseFloat(e.importe_cobrado)||0)),
+      obra_id:    e.obra_id,
+      obra_nombre:e.obra,
+      fecha_factura: e.fecha_presentada || null,
+      estimacion_id: estimId,
+      observaciones: 'Generada desde la estimación de Control de Obra',
+      created_by: currentUser ? currentUser.nombre : null
+    });
+    showToast('✅ CxC generada · ya puedes registrar su cobro');
+    await loadPlaneacion();
+    renderPlaneacion();
+  } catch(err){ showToast('No se generó: '+err.message, true); }
+}
+
 function renderCXCList() {
-  if(!cxcData.length) return '<div class="empty"><div class="empty-icon">📥</div><div class="empty-title">Sin cuentas por cobrar</div><div class="empty-sub">Toca + para registrar</div></div>';
+  var pend = renderEstimPendientes();
+  if(!cxcData.length) return pend + '<div class="empty"><div class="empty-icon">📥</div><div class="empty-title">Sin cuentas por cobrar</div><div class="empty-sub">Toca + para registrar</div></div>';
 
   var cxcClientes = [...new Set(cxcData.map(function(x){return x.cliente;}).filter(Boolean))].sort();
   var cxcNegocios = [...new Set(cxcData.map(function(x){return x.negocio;}).filter(Boolean))].sort();
