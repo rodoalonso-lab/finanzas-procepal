@@ -4967,8 +4967,23 @@ function imprimirObra(obraId) {
   requisicionesData.filter(function(r){ return r.obra_id===obraId; }).forEach(function(r){
     movObra.push({fecha:r.fecha||'', tipo:'egreso', desc:r.folio||r.tipo||'Requisición', cat:'Requisición', monto:parseFloat(r.monto_cotizado)||0, extra:r.proveedor||null});
   });
-  egresosManualData.filter(function(m){ return m.obra_id===obraId; }).forEach(function(m){
-    movObra.push({fecha:m.fecha||'', tipo:'egreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
+  egresosManualData.filter(function(m){ return m.obra_id===obraId && !esNominaManual(m); })
+    .forEach(function(m){
+      movObra.push({fecha:m.fecha||'', tipo:'egreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
+    });
+  // La nómina también va en el impreso: si falta ahí, el papel que se firma no
+  // cuadra con la pantalla.
+  nominaSemanaData.filter(function(n){ return n.obra_id===obraId; }).forEach(function(n){
+    var esMO = n.tipo_insumo === 'MANO_DE_OBRA';
+    movObra.push({
+      fecha: (n.fecha_fin||'').toString().slice(0,10),
+      tipo : 'egreso',
+      desc : esMO ? ('Nómina semana ' + n.semana)
+                  : ('Indirecto oficina · semana ' + n.semana),
+      cat  : esMO ? 'Mano de obra' : 'Indirectos',
+      monto: parseFloat(n.monto)||0,
+      extra: esMO ? ((n.personas||0)+' persona'+(n.personas===1?'':'s')+' en obra') : null
+    });
   });
   movObra.sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
 
