@@ -1449,7 +1449,7 @@ async function loadCatalogos() {
 //          movimientos (Finanzas — solo ingresos manuales)
 async function loadControlPresupuestal() {
   const lim = PAGE_LIMITS;
-  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet, _nom] = await Promise.all([
+  const [_movIng, _movEgr, _requis, _oc, _ejec, _ejecDet, _nom, _nomSem] = await Promise.all([
     dbSafe('GET',
       'movimientos?tipo=eq.ingreso&order=fecha.desc&limit=' + lim.movimientos,
       null, 'movimientos_ingreso'),
@@ -1467,6 +1467,10 @@ async function loadControlPresupuestal() {
     // oficina como indirecto. Sin esto el presupuesto por obra ignoraba el
     // costo de la gente, que es el renglón más grande de todos.
     dbSafe('GET', 'v_obra_nomina', null, 'nomina_obra'),
+    // Desglose por semana: es lo que se lista en los movimientos cronológicos
+    // de cada obra. El agregado de arriba es la suma de esto, así que el
+    // encabezado y la lista no pueden discrepar.
+    dbSafe('GET', 'v_obra_nomina_semana?order=fecha_fin', null, 'nomina_semana'),
   ]);
   movimientos       = _movIng;
   egresosManualData = _movEgr;
@@ -1475,6 +1479,7 @@ async function loadControlPresupuestal() {
   ejecucionData     = _ejec;
   ejecucionDetalleData = _ejecDet;
   nominaObraData    = _nom || [];
+  nominaSemanaData  = _nomSem || [];
   console.log('[Control Presupuestal] ' + movimientos.length + ' ingresos, ' + egresosManualData.length + ' egresos manuales, ' + requisicionesData.length + ' requisiciones aprobadas, ' + nominaObraData.length + ' renglones de nómina por obra');
 }
 
@@ -1860,8 +1865,25 @@ function renderDashboard() {
         // reqId viaja con el movimiento para poder abrir su ficha al tocarlo
         movObra.push({fecha:r.fecha||'', tipo:'egreso', desc:r.folio||r.tipo||'Requisición', cat:'Requisición', monto:parseFloat(r.monto_cotizado)||0, extra:r.proveedor||null, reqId:r.id});
       });
-      egresosManualData.filter(m=>m.obra_id===obraId).forEach(m=>{
+      egresosManualData.filter(m=>m.obra_id===obraId && !esNominaManual(m)).forEach(m=>{
         movObra.push({fecha:m.fecha||'', tipo:'egreso', desc:m.descripcion||'—', cat:m.categoria||'—', monto:m.monto||0, extra:null});
+      });
+      // Nómina: un renglón por semana cerrada. La mano de obra directa y el
+      // prorrateo de oficina van separados para que se vea de dónde sale cada
+      // peso; la fecha es el cierre de la semana.
+      nominaSemanaData.filter(n=>n.obra_id===obraId).forEach(n=>{
+        var esMO = n.tipo_insumo === 'MANO_DE_OBRA';
+        movObra.push({
+          fecha: (n.fecha_fin||'').toString().slice(0,10),
+          tipo : 'egreso',
+          desc : esMO ? ('👷 Nómina semana ' + n.semana)
+                      : ('🏢 Indirecto oficina · semana ' + n.semana),
+          cat  : esMO ? 'Mano de obra' : 'Indirectos',
+          monto: parseFloat(n.monto)||0,
+          extra: esMO
+            ? ((n.personas||0) + ' persona' + (n.personas===1?'':'s') + ' en obra')
+            : 'Prorrateo por participación de la semana'
+        });
       });
       movObra.sort((a,b)=>a.fecha.localeCompare(b.fecha));
       let saldoCor = 0;
@@ -3265,6 +3287,7 @@ let movBancariosDB = [];
 let requisicionesData = []; // Solo lectura desde MetalTek — NO se modifica desde Finanzas
 let egresosManualData = []; // Egresos manuales registrados en Finanzas (movimientos tipo=egreso)
 let nominaObraData    = []; // Nómina cerrada por obra (v_obra_nomina, MetalTek, solo lectura)
+let nominaSemanaData  = []; // La misma nómina desglosada por semana, para el detalle cronológico
 let cxpData = [];       // cuentas por pagar
 let ejecucionData = []; // v_ejecucion_por_obra
 let ejecucionDetalleData = []; // v_ejecucion_presupuestal
