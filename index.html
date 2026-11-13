@@ -5020,47 +5020,54 @@ function imprimirObra(obraId) {
     ? '<tr style="background:#eef"><td colspan="3" style="padding:6px 8px;font-weight:600;color:#3a3a8c">Presupuesto asignado</td><td colspan="2" style="text-align:right;padding:6px 8px;font-weight:700;color:#3a3a8c">'+fmtP(presupuesto)+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:'+balColor+'">Desvío: '+(presupuesto-totalEgr>=0?'+':'')+fmtP(presupuesto-totalEgr)+'</td></tr>'
     : '';
 
+  // Identidad PROCEPAL compartida: logo, paleta y hoja de estilo salen de
+  // procepal-lib.js, los mismos que usa el impreso de nómina.
+  var sello = presupuesto > 0
+    ? { texto: (presupuesto-totalEgr >= 0 ? 'DENTRO DE PRESUPUESTO' : 'SOBREGIRADA'),
+        ambar: (presupuesto-totalEgr < 0) }
+    : null;
+
+  var kpi = function(l, v, cls){
+    return '<div class="pr-k'+(cls?' '+cls:'')+'"><div class="pr-k-l">'+l+'</div>'
+         + '<div class="pr-k-v">'+v+'</div></div>';
+  };
+  var nKpis = 3 + (presupuesto>0 ? 2 : 0);
+
   var w = window.open('','_blank');
   w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'+
-    '<title>Estado de Cuenta - '+obraNombre+'</title>'+
-    '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#222;padding:28px}'+
-    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #111;padding-bottom:14px;margin-bottom:18px}'+
-    '.logo{font-size:20px;font-weight:900;letter-spacing:2px;color:#111}.sub{font-size:10px;color:#777;margin-top:3px}'+
-    '.obra{font-size:18px;font-weight:800;color:#111;text-align:right}.fecha{font-size:10px;color:#777;text-align:right;margin-top:3px}'+
-    '.kpis{display:flex;gap:12px;margin-bottom:20px}'+
-    '.kpi{flex:1;border:1px solid #ddd;border-radius:6px;padding:10px 14px}'+
-    '.kpi-lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;font-weight:600}'+
-    '.kpi-val{font-size:15px;font-weight:800}'+
-    'table{width:100%;border-collapse:collapse;font-size:11px}'+
-    'thead tr{background:#1a1a2e;color:#fff}'+
-    'th{padding:8px 8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}'+
-    '.tr{text-align:right}'+
-    'tfoot tr{background:#f0f0f0;border-top:2px solid #111}'+
-    'td{vertical-align:top}'+
-    '.footer{margin-top:14px;font-size:10px;color:#bbb;text-align:right}'+
-    '@media print{body{padding:8px}@page{margin:1.5cm;size:Letter landscape}}'+
+    '<title>Estado de cuenta · '+obraNombre+'</title><style>'+
+    cssImpresoPROCEPAL('landscape', 10)+
+    '.pr-kpis{grid-template-columns:repeat('+nKpis+',1fr)}'+
+    'td.cat{font-size:9px;color:#5A8FA8}'+
+    'tfoot tr td{background:#0A1628;color:#fff;font-weight:900;font-size:11px;padding:7px}'+
+    'tfoot tr td:first-child{color:#5BC4C0}'+
+    '@media print{tfoot tr td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
     '</style></head><body>'+
-    '<div class="hdr"><div><div class="logo">PROCEPAL</div><div class="sub">Estado de Cuenta por Proyecto</div></div>'+
-    '<div><div class="obra">'+obraNombre+'</div><div class="fecha">Generado: '+today+'</div></div></div>'+
-    '<div class="kpis">'+
-    '<div class="kpi"><div class="kpi-lbl">Total Ingresos</div><div class="kpi-val" style="color:#0d7a5f">'+fmtP(totalIng)+'</div></div>'+
-    '<div class="kpi"><div class="kpi-lbl">Total Egresos</div><div class="kpi-val" style="color:#c0392b">'+fmtP(totalEgr)+'</div></div>'+
-    (presupuesto>0?'<div class="kpi"><div class="kpi-lbl">Presupuesto</div><div class="kpi-val" style="color:#3a3a8c">'+fmtP(presupuesto)+'</div></div>':'')+
-    '<div class="kpi"><div class="kpi-lbl">Balance Final</div><div class="kpi-val" style="color:'+balColor+'">'+balSign+fmtP(Math.abs(balFinal))+'</div></div>'+
+    encabezadoPROCEPAL('Estado de cuenta por proyecto', obraNombre,
+       movObra.length+' movimientos · generado '+today, sello)+
+    '<div class="pr-kpis">'+
+      kpi('Ingresos', fmtP(totalIng), 'pr-k-ok')+
+      kpi('Egresos', fmtP(totalEgr), 'pr-k-amb')+
+      (presupuesto>0 ? kpi('Presupuesto', fmtP(presupuesto)) : '')+
+      (presupuesto>0 ? kpi('Desvío', (presupuesto-totalEgr>=0?'+':'')+fmtP(presupuesto-totalEgr),
+                           (presupuesto-totalEgr>=0?'pr-k-ok':'pr-k-amb')) : '')+
+      kpi('Balance', balSign+fmtP(Math.abs(balFinal)), 'pr-k-tot')+
     '</div>'+
+    '<div class="pr-sec">Movimientos cronológicos</div>'+
     '<table><thead><tr>'+
-    '<th>Fecha</th><th>Descripción</th><th>Categoría</th>'+
-    '<th class="tr">Ingreso</th><th class="tr">Egreso</th><th class="tr">Saldo</th>'+
+      '<th>Fecha</th><th>Descripción</th><th>Categoría</th>'+
+      '<th class="num">Ingreso</th><th class="num">Egreso</th><th class="num">Saldo</th>'+
     '</tr></thead><tbody>'+rows+'</tbody>'+
-    '<tfoot>'+
-    '<tr><td colspan="3" style="padding:8px;font-weight:700">TOTALES</td>'+
-    '<td style="padding:8px;text-align:right;font-weight:700;color:#0d7a5f">'+fmtP(totalIng)+'</td>'+
-    '<td style="padding:8px;text-align:right;font-weight:700;color:#c0392b">'+fmtP(totalEgr)+'</td>'+
-    '<td style="padding:8px;text-align:right;font-weight:800;color:'+balColor+'">'+balSign+fmtP(Math.abs(balFinal))+'</td>'+
+    '<tfoot><tr><td colspan="3">TOTALES</td>'+
+      '<td class="num">'+fmtP(totalIng)+'</td>'+
+      '<td class="num">'+fmtP(totalEgr)+'</td>'+
+      '<td class="num">'+balSign+fmtP(Math.abs(balFinal))+'</td>'+
     '</tr></tfoot></table>'+
-    presRow+
-    '<div class="footer">Procepal · Sistema de Gestión Financiera · '+today+'</div>'+
-    '<script>window.onload=function(){window.print()}<\/script>'+
+    '<div class="pr-nota">Incluye requisiciones autorizadas, egresos registrados en '+
+      'Finanzas y la nómina de las semanas cerradas (mano de obra directa más el '+
+      'prorrateo de estructura).</div>'+
+    '<div class="pr-pie"><span>PROCEPAL · '+obraNombre+'</span>'+
+      '<span>Generado '+today+'</span></div>'+
     '</body></html>');
   w.document.close();
 }
