@@ -5871,16 +5871,27 @@ function resetCXCFiltros() {
 // es la dueña de la tabla. Así se ligan sin que MetalTek escriba aquí.
 function renderEstimPendientes(){
   if(!estimSinCxc || !estimSinCxc.length) return '';
-  var tot = estimSinCxc.reduce(function(a,e){ return a + (parseFloat(e.total)||0); }, 0);
+  // Sólo las presentadas al cliente pueden generar CxC. Las que no tienen
+  // fecha de presentación son borradores: facturarlas sería inventar un
+  // derecho de cobro que el cliente todavía no reconoce.
+  var listas    = estimSinCxc.filter(function(e){ return e.presentada; });
+  var borradores= estimSinCxc.filter(function(e){ return !e.presentada; });
+  if(!listas.length && !borradores.length) return '';
+  var tot = listas.reduce(function(a,e){ return a + (parseFloat(e.total)||0); }, 0);
+  var totB= borradores.reduce(function(a,e){ return a + (parseFloat(e.total)||0); }, 0);
   var h = '<div class="card" style="margin-bottom:12px;border-color:rgba(240,165,0,.35);'
         + 'background:rgba(240,165,0,.05)">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-        + '<div><div style="font-size:13px;font-weight:700;color:var(--warn)">📄 Estimaciones sin facturar</div>'
-        + '<div style="font-size:10px;color:var(--dim)">Vienen de Control de Obra. Genera su CxC para darles seguimiento de cobro.</div></div>'
+        + '<div><div style="font-size:13px;font-weight:700;color:var(--warn)">📄 Estimaciones presentadas sin facturar</div>'
+        + '<div style="font-size:10px;color:var(--dim)">Ya salieron al cliente. Genera su CxC para darles seguimiento de cobro.</div></div>'
         + '<div style="text-align:right"><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;'
         + 'font-weight:800;color:var(--warn)">'+fmt(tot)+'</div>'
-        + '<div style="font-size:9px;color:var(--dim)">'+estimSinCxc.length+' documento'+(estimSinCxc.length>1?'s':'')+'</div></div></div>';
-  estimSinCxc.forEach(function(e){
+        + '<div style="font-size:9px;color:var(--dim)">'+listas.length+' documento'+(listas.length!==1?'s':'')+'</div></div></div>';
+  if(!listas.length){
+    h += '<div style="font-size:11px;color:var(--dim);padding:8px 0;border-top:1px solid var(--border)">'
+       + 'Ninguna estimación se ha presentado al cliente todavía.</div>';
+  }
+  listas.forEach(function(e){
     var esAnt = String(e.tipo).toLowerCase()==='anticipo';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;'
        + 'padding:8px 0;border-top:1px solid var(--border)">'
@@ -5888,8 +5899,7 @@ function renderEstimPendientes(){
        + '<div style="font-size:12px;font-weight:700">'+(esAnt?'💰 Anticipo':'📄 Estimación '+e.no)
        + (e.periodo?' · '+e.periodo:'')+'</div>'
        + '<div style="font-size:10px;color:var(--dim)">'+(e.obra||'—')
-       + (e.fecha_presentada?' · presentada '+fmtDate(e.fecha_presentada)
-          :' · <span style="color:var(--warn)">sin fecha de presentación</span>')+'</div></div>'
+       + ' · presentada '+fmtDate(e.fecha_presentada)+'</div></div>'
        + '<div style="text-align:right;flex:none">'
        + '<div style="font-size:13px;font-weight:800">'+fmt(e.total)+'</div></div>'
        + '<button class="btn btn-sm" data-gen-cxc="'+e.estimacion_id+'" '
@@ -5897,6 +5907,22 @@ function renderEstimPendientes(){
        + 'padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Barlow\',sans-serif">'
        + 'Generar CxC</button></div>';
   });
+
+  // Los borradores se ven, pero sin botón: son informativos.
+  if(borradores.length){
+    h += '<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px">'
+       + '<div style="font-size:10px;color:var(--dim);font-weight:700;letter-spacing:.06em;'
+       + 'text-transform:uppercase;margin-bottom:5px">En preparación · '+fmt(totB)+'</div>';
+    borradores.forEach(function(e){
+      var esA = String(e.tipo).toLowerCase()==='anticipo';
+      h += '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;opacity:.6">'
+         + '<div style="font-size:11px">'+(esA?'💰 Anticipo':'📄 Estimación '+e.no)
+         + ' · <span style="color:var(--dim)">'+(e.obra||'—')+'</span></div>'
+         + '<div style="font-size:11px;font-weight:700">'+fmt(e.total)+'</div></div>';
+    });
+    h += '<div style="font-size:10px;color:var(--dim);margin-top:5px">Captúrales la fecha de '
+       + 'presentación en Control de Obra cuando salgan al cliente y aparecerán arriba.</div></div>';
+  }
   return h + '</div>';
 }
 
