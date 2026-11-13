@@ -1519,7 +1519,7 @@ async function loadFiscalizacion() {
 // IMPORTANTE: pagos en Planeación NO generan movimientos en Control Presupuestal
 async function loadPlaneacion() {
   const lim = PAGE_LIMITS;
-  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu, _amort, _cortes] = await Promise.all([
+  const [_cxp, _cxc, _deuda, _sols, _solItems, _pagosDeu, _amort, _cortes, _estSin] = await Promise.all([
     dbSafe('GET', 'cuentas_por_pagar?order=created_at.desc&limit='  + lim.cuentas_por_pagar,  null, 'cxp'),
     dbSafe('GET', 'cuentas_por_cobrar?order=created_at.desc&limit=' + lim.cuentas_por_cobrar, null, 'cxc'),
     dbSafe('GET', 'deuda_financiera?order=created_at.desc&limit='         + lim.deuda_financiera,   null, 'deuda'),
@@ -1528,9 +1528,14 @@ async function loadPlaneacion() {
     dbSafe('GET', 'deuda_pagos?order=fecha.desc&limit=500',                                        null, 'deuda_pagos'),
     dbSafe('GET', 'deuda_amortizacion?order=num_pago.asc&limit=2000',                             null, 'amortizacion'),
     dbSafe('GET', 'tarjeta_cortes?order=periodo.desc&limit=500',                                  null, 'tarjeta_cortes'),
+    // Estimaciones de obra sin CxC. Se LEE de MetalTek (permitido); la CxC la
+    // escribe Finanzas, que es la dueña de la tabla. Así la estimación llega a
+    // cobranza sin que MetalTek escriba en tablas de Finanzas.
+    dbSafe('GET', 'v_estimaciones_sin_cxc', null, 'estim_sin_cxc'),
   ]);
   cxpData        = _cxp;
   cxcData        = _cxc;
+  estimSinCxc    = _estSin || [];
   deudaData      = _deuda;
   solicitudesPago = _sols;
   solicitudItems  = _solItems;
@@ -3313,6 +3318,7 @@ let cxpData = [];       // cuentas por pagar
 let ejecucionData = []; // v_ejecucion_por_obra
 let ejecucionDetalleData = []; // v_ejecucion_presupuestal
 let cxcData = [];       // cuentas por cobrar
+let estimSinCxc = [];   // estimaciones de obra que aún no tienen su CxC (solo lectura)
 let deudaData = [];     // deuda financiera
 let pagosDeudaData = []; // deuda_pagos: historial de pagos
 let amortData = [];      // deuda_amortizacion: tablas de amortizacion
