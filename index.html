@@ -5510,6 +5510,13 @@ async function cerrarSolicitud(solId) {
 function renderPlaneacion() {
   const el = document.getElementById('main-content');
   if(!el) return;
+  if(!el.dataset.genCxcLigado){
+    el.dataset.genCxcLigado = '1';
+    el.addEventListener('click', function(ev){
+      var b = ev.target.closest('[data-gen-cxc]');
+      if(b) generarCxcDesdeEstimacion(b.getAttribute('data-gen-cxc'));
+    });
+  }
   // Guardar foco y posicion del cursor antes de re-renderizar
   var _focusId  = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
   var _focusPos = (_focusId && document.activeElement.selectionStart != null) ? document.activeElement.selectionStart : null;
@@ -5942,13 +5949,14 @@ function renderCXCList() {
   if(filtroObra)    items = items.filter(function(x){return (x.obra_nombre||'')===filtroObra;});
   if(filtroEstCxc==='pendiente') items = items.filter(function(x){return (x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)))>0.01;});
   if(filtroEstCxc==='cobrado')   items = items.filter(function(x){return (x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)))<=0.01;});
+  // el panel de estimaciones sin facturar encabeza la lista
 
   var totalMonto  = items.reduce(function(s,x){return s+(x.monto||0);},0);
   var totalPagado = items.reduce(function(s,x){return s+(x.pagado||0);},0);
   var totalSaldo  = items.reduce(function(s,x){return s+(x.saldo!=null?x.saldo:Math.max(0,(x.monto||0)-(x.pagado||0)));},0);
   var ss = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--text);font-family:Barlow,sans-serif;outline:none;cursor:pointer';
 
-  var html = '';
+  var html = pend;
   html += '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">';
   html += '<div><div class="stat-label">Facturado</div><div style="font-family:Barlow Condensed,sans-serif;font-size:17px;font-weight:800">'+fmt(totalMonto)+'</div></div>';
   html += '<div><div class="stat-label" style="color:var(--success)">Cobrado</div><div style="font-family:Barlow Condensed,sans-serif;font-size:17px;font-weight:800;color:var(--success)">'+fmt(totalPagado)+'</div></div>';
@@ -7836,6 +7844,32 @@ async function guardarPagoCXC() {
       pagado: nuevoPagado,
       saldo:  nuevoSaldo
     });
+
+    // Si la CxC es de una obra, el cobro SÍ entra al Control Presupuestal:
+    // es dinero del proyecto. El aislamiento de Planeación se conserva para
+    // las CxC sin obra, que son de otros negocios.
+    if(x.obra_id){
+      var propC = (x.monto||0) > 0 ? pago / (x.monto||0) : 0;
+      var subC  = Math.round((x.subtotal||0) * propC * 100) / 100;
+      var ivaC  = Math.round((pago - subC) * 100) / 100;
+      try {
+        await db('POST','movimientos', {
+          tipo: 'ingreso',
+          categoria: /anticipo/i.test(x.factura||'') ? 'Anticipo' : 'Estimación',
+          descripcion: (x.factura || 'Cobro CxC'),
+          monto: subC, iva: ivaC,
+          obra_id: x.obra_id,
+          proveedor_cliente: x.cliente || null,
+          fecha: new Date().toISOString().slice(0,10),
+          forma_pago: 'transferencia',
+          cxc_id: _pagoCXCId,
+          estimacion_id: x.estimacion_id || null,
+          created_by: currentUser ? currentUser.nombre : null
+        });
+      } catch(eMov){
+        showToast('Pago guardado, pero no se reflejó en Control Presupuestal: '+eMov.message, true);
+      }
+    }
 
     var msg = nuevoSaldo <= 0.01
       ? '✅ Pago completo — CxC liquidada'
